@@ -74,65 +74,63 @@ def get_tables(base_id):
 
 def get_records(base_id, table_id, year, plaza):
     """
-    Obtiene TODOS los registros y filtra manualmente en Python 
-    para evitar errores de fórmulas de Airtable.
+    Obtiene todos los registros y filtra en Python usando los nombres EXACTOS:
+    'Fecha' y 'Sucursal'. Maneja Sucursal como texto o lista.
     """
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     
-    # 1. Traemos TODO sin filtrar por fórmula (más seguro)
+    # 1. Traemos TODOS los datos de la tabla (sin filtrar por fórmula para evitar errores 422)
     try:
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
-            st.error(f"Error Airtable ({r.status_code}): {r.text}")
+            st.error(f"Error conectando a Airtable: {r.status_code}")
             return []
-            
-        all_records = r.json().get('records', [])
+        data = r.json().get('records', [])
     except Exception as e:
-        st.error(f"Error de conexión: {e}")
+        st.error(f"Error de conexión: {str(e)}")
         return []
 
-    # 2. Filtramos en Python (Más flexible)
-    filtered_records = []
+    filtered = []
     
-    for rec in all_records:
-        f = rec.get('fields', {})
+    # 2. Filtramos registro por registro
+    for rec in data:
+        fields = rec.get('fields', {})
         
-        # --- A. VERIFICACIÓN DE FECHA ---
-        # Buscamos campos comunes de fecha si 'Fecha' no existe
-        fecha_str = f.get('Fecha') or f.get('Date') or f.get('Dia')
-        
+        # --- FILTRO 1: FECHA ---
+        # Campo exacto: 'Fecha' (Formato YYYY-MM-DD)
+        fecha_dato = fields.get('Fecha')
         match_year = False
-        if fecha_str:
-            try:
-                # Si es '2025-01-20', tomamos los primeros 4 chars
-                if str(fecha_str)[:4] == str(year):
-                    match_year = True
-            except: pass
-        
-        # --- B. VERIFICACIÓN DE SUCURSAL ---
-        # Buscamos campos comunes de lugar
-        suc_dato = f.get('Sucursal') or f.get('Plaza') or f.get('Lugar')
-        
-        match_plaza = False
-        if suc_dato:
-            # A veces Airtable devuelve listas si es un campo de enlace
-            val_suc = suc_dato[0] if isinstance(suc_dato, list) else suc_dato
+        if fecha_dato and str(fecha_dato).startswith(str(year)):
+            match_year = True
             
-            # Comparamos ignorando mayúsculas/minúsculas
-            if str(val_suc).strip().lower() == str(plaza).strip().lower():
+        # --- FILTRO 2: SUCURSAL ---
+        # Campo exacto: 'Sucursal'
+        suc_dato = fields.get('Sucursal')
+        match_plaza = False
+        
+        if suc_dato:
+            # Truco: Airtable a veces devuelve listas (['Veracruz']) o texto ('Veracruz')
+            # Esto lo unifica a texto simple para comparar
+            if isinstance(suc_dato, list):
+                val_suc = str(suc_dato[0])
+            else:
+                val_suc = str(suc_dato)
+            
+            # Comparamos quitando espacios y mayúsculas
+            if val_suc.strip().lower() == str(plaza).strip().lower():
                 match_plaza = True
         
-        # Si cumple AMBOS (o si no hay fecha estricta, solo plaza), lo agregamos
-        if match_plaza and match_year:
-            filtered_records.append(rec)
+        # Si cumple AMBOS, lo guardamos
+        if match_year and match_plaza:
+            filtered.append(rec)
             
-    # Ordenar por fecha (opcional)
+    # Ordenar por fecha y hora (Opcional, para que salgan en orden)
     try:
-        filtered_records.sort(key=lambda x: x['fields'].get('Fecha', ''))
+        filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     except: pass
 
-    return filtered_records
+    return filtered
 
 # ==============================================================================
 # 3. GESTIÓN DE SESIÓN
