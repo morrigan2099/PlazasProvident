@@ -5,6 +5,8 @@ import cloudinary.uploader
 import pandas as pd
 from datetime import datetime
 import os
+import json
+import unicodedata
 
 # ==============================================================================
 # 1. CONFIGURACIÓN Y CREDENCIALES
@@ -19,24 +21,62 @@ CLOUDINARY_CONFIG = {
 }
 
 AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87ad1f2d71bfe853ce9783"
-ADMIN_PASS = "3spejoVenenoso$2099"
+# La contraseña maestra ahora sirve para crear el primer admin si se borra la DB
+MASTER_ADMIN_PASS = "3spejoVenenoso$2099" 
 
-# Configuración Inicial
+# Configuración Inicial Cloudinary
 cloudinary.config(
     cloud_name=CLOUDINARY_CONFIG["cloud_name"],
     api_key=CLOUDINARY_CONFIG["api_key"],
     api_secret=CLOUDINARY_CONFIG["api_secret"]
 )
 
-SUCURSALES = ["Puebla", "Veracruz", "Xalapa", "Oaxaca", "León", "Querétaro", "CDMX", "Mérida"]
+# --- SUCURSALES (Definición Oficial) ---
+SUCURSALES_OFICIALES = [
+    "Cordoba", "Orizaba", "Xalapa", "Puebla", 
+    "Oaxaca", "Tuxtepec", "Boca del Río"
+]
+
+FILES_DB = "usuarios.json"
 HISTORIAL_FILE = "historial_modificaciones.csv"
 
 # ==============================================================================
-# 2. FUNCIONES
+# 2. FUNCIONES DE UTILIDAD (TEXTO Y DB)
 # ==============================================================================
 
+def normalizar_texto(texto):
+    """
+    Elimina acentos y convierte a minúsculas para comparaciones robustas.
+    Ej: 'Córdoba' -> 'cordoba'
+    """
+    if not isinstance(texto, str): return str(texto).lower()
+    texto = unicodedata.normalize('NFD', texto)
+    return ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower()
+
+def cargar_usuarios():
+    """Carga la base de datos de usuarios, o crea el admin por defecto."""
+    if not os.path.exists(FILES_DB):
+        # Usuario Admin por defecto si no existe el archivo
+        default_db = {
+            "admin": {
+                "password": MASTER_ADMIN_PASS,
+                "role": "admin",
+                "plazas": SUCURSALES_OFICIALES # Admin tiene todas
+            }
+        }
+        with open(FILES_DB, 'w') as f:
+            json.dump(default_db, f)
+        return default_db
+    
+    with open(FILES_DB, 'r') as f:
+        return json.load(f)
+
+def guardar_usuarios(db):
+    """Guarda los cambios en usuarios.json"""
+    with open(FILES_DB, 'w') as f:
+        json.dump(db, f)
+
 def registrar_historial(accion, usuario, sucursal, detalles):
-    """Guarda registro de actividad en CSV"""
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     nuevo_registro = {
         "Fecha": fecha, "Usuario": usuario, "Sucursal": sucursal,
@@ -48,9 +88,12 @@ def registrar_historial(accion, usuario, sucursal, detalles):
     else:
         df_new.to_csv(HISTORIAL_FILE, mode='a', header=False, index=False)
 
+# ==============================================================================
+# 3. FUNCIONES AIRTABLE
+# ==============================================================================
+
 @st.cache_data(ttl=600)
 def get_bases():
-    """Obtiene bases de Airtable"""
     url = "https://api.airtable.com/v0/meta/bases"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
@@ -62,7 +105,6 @@ def get_bases():
 
 @st.cache_data(ttl=60)
 def get_tables(base_id):
-    """Obtiene tablas (Meses)"""
     url = f"https://api.airtable.com/v0/meta/bases/{base_id}/tables"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
@@ -73,14 +115,9 @@ def get_tables(base_id):
     return {}
 
 def get_records(base_id, table_id, year, plaza):
-    """
-    Obtiene todos los registros y filtra en Python usando los nombres EXACTOS:
-    'Fecha' y 'Sucursal'. Maneja Sucursal como texto o lista.
-    """
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     
-    # 1. Traemos TODOS los datos de la tabla (sin filtrar por fórmula)
     try:
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
@@ -92,37 +129,35 @@ def get_records(base_id, table_id, year, plaza):
         return []
 
     filtered = []
-    
-    # 2. Filtramos registro por registro en Python
+    # Normalizamos la plaza buscada
+    plaza_norm = normalizar_texto(plaza)
+
     for rec in data:
         fields = rec.get('fields', {})
         
-        # --- FILTRO 1: FECHA ---
+        # FILTRO 1: FECHA
         fecha_dato = fields.get('Fecha')
         match_year = False
         if fecha_dato and str(fecha_dato).startswith(str(year)):
             match_year = True
             
-        # --- FILTRO 2: SUCURSAL ---
+        # FILTRO 2: SUCURSAL (INSENSIBLE A MAYUS/ACENTOS)
         suc_dato = fields.get('Sucursal')
         match_plaza = False
         
         if suc_dato:
-            # Unifica si es lista (['Veracruz']) o texto ('Veracruz')
             if isinstance(suc_dato, list):
                 val_suc = str(suc_dato[0])
             else:
                 val_suc = str(suc_dato)
             
-            # Comparamos quitando espacios y mayúsculas
-            if val_suc.strip().lower() == str(plaza).strip().lower():
+            # Comparamos normalizado vs normalizado
+            if normalizar_texto(val_suc) == plaza_norm:
                 match_plaza = True
         
-        # Si cumple AMBOS, lo guardamos
         if match_year and match_plaza:
             filtered.append(rec)
             
-    # Ordenar por fecha y hora
     try:
         filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     except: pass
@@ -130,7 +165,6 @@ def get_records(base_id, table_id, year, plaza):
     return filtered
 
 def upload_evidence_to_airtable(base_id, table_id, record_id, updates_dict):
-    """Envía enlaces de fotos a Airtable"""
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
     data = {"fields": updates_dict}
@@ -138,16 +172,17 @@ def upload_evidence_to_airtable(base_id, table_id, record_id, updates_dict):
     return r.status_code == 200
 
 # ==============================================================================
-# 3. GESTIÓN DE SESIÓN
+# 4. GESTIÓN DE SESIÓN
 # ==============================================================================
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'user_role' not in st.session_state: st.session_state.user_role = "user"
 if 'user_name' not in st.session_state: st.session_state.user_name = ""
+if 'allowed_plazas' not in st.session_state: st.session_state.allowed_plazas = []
 if 'sucursal_actual' not in st.session_state: st.session_state.sucursal_actual = ""
 if 'selected_event' not in st.session_state: st.session_state.selected_event = None
 
 # ==============================================================================
-# 4. PANTALLA DE LOGIN
+# 5. PANTALLA DE LOGIN
 # ==============================================================================
 if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -158,50 +193,44 @@ if not st.session_state.logged_in:
         st.markdown("### 🔐 Acceso al Sistema")
         
         with st.form("login_form"):
-            # El Admin TAMBIÉN selecciona aquí su plaza de trabajo
-            sucursal_sel = st.selectbox("📍 Selecciona tu Plaza (Sucursal):", SUCURSALES)
             usuario_input = st.text_input("👤 Usuario:")
-            
-            st.markdown("---")
-            es_admin = st.checkbox("Soy Administrador")
-            pass_input = st.text_input("Contraseña Admin:", type="password")
+            pass_input = st.text_input("🔑 Contraseña:", type="password")
             
             btn_ingresar = st.form_submit_button("Ingresar", use_container_width=True)
             
             if btn_ingresar:
-                if not usuario_input:
-                    st.error("Ingresa un usuario.")
-                elif es_admin:
-                    if pass_input == ADMIN_PASS:
-                        st.session_state.logged_in = True
-                        st.session_state.user_role = "admin"
-                        st.session_state.user_name = usuario_input
-                        st.session_state.sucursal_actual = sucursal_sel 
-                        registrar_historial("Login Admin", usuario_input, sucursal_sel, "Acceso OK")
-                        st.rerun()
-                    else:
-                        st.error("Contraseña incorrecta.")
-                else:
-                    # Usuario normal
+                users_db = cargar_usuarios()
+                user_data = users_db.get(usuario_input)
+
+                if user_data and user_data['password'] == pass_input:
+                    # Login Exitoso
                     st.session_state.logged_in = True
-                    st.session_state.user_role = "user"
+                    st.session_state.user_role = user_data.get('role', 'user')
                     st.session_state.user_name = usuario_input
-                    st.session_state.sucursal_actual = sucursal_sel
-                    registrar_historial("Login User", usuario_input, sucursal_sel, "Acceso OK")
+                    # Guardamos las plazas permitidas para este usuario
+                    st.session_state.allowed_plazas = user_data.get('plazas', [])
+                    
+                    registrar_historial("Login", usuario_input, "Sistema", "Inicio de sesión exitoso")
                     st.rerun()
+                else:
+                    st.error("Usuario o contraseña incorrectos.")
 
 # ==============================================================================
-# 5. APLICACIÓN PRINCIPAL
+# 6. APLICACIÓN PRINCIPAL
 # ==============================================================================
 else:
     # --- BARRA LATERAL (SIDEBAR) ---
     with st.sidebar:
-        st.header("📅 Configuración")
+        st.header(f"Hola, {st.session_state.user_name}")
+        st.caption(f"Rol: {st.session_state.user_role.upper()}")
+        
+        st.divider()
+        st.subheader("📅 Configuración de Trabajo")
         
         # 1. Base de Datos
         bases_map = get_bases()
         if not bases_map:
-            st.error("Error de conexión con Airtable.")
+            st.error("Error Airtable.")
             st.stop()
         base_name = st.selectbox("Base de Datos:", list(bases_map.keys()))
         base_id = bases_map[base_name]
@@ -212,21 +241,25 @@ else:
         if tables_map:
             table_name = st.selectbox("Mes de Trabajo:", list(tables_map.keys()))
             table_id = tables_map[table_name]
-        else:
-            st.warning("Sin tablas.")
-
+        
         # 3. Año
         sel_year = st.number_input("Año:", min_value=2024, max_value=2030, value=2025)
-        
+
         st.divider()
 
-        # 4. PLAZA FIJA (Ya no hay selector extra)
-        # Se usa la plaza seleccionada en el Login
-        sel_plaza = st.session_state.sucursal_actual
-        st.info(f"📍 Plaza: **{sel_plaza}**")
+        # 4. SELECCIÓN DE SUCURSAL (Limitada por permisos)
+        # Si el usuario no tiene plazas asignadas, mostrar error
+        plazas_permitidas = st.session_state.allowed_plazas
+        
+        if not plazas_permitidas:
+            st.error("No tienes sucursales asignadas. Contacta al Admin.")
+            sel_plaza = None
+        else:
+            sel_plaza = st.selectbox("📍 Selecciona Plaza a gestionar:", plazas_permitidas)
+            st.session_state.sucursal_actual = sel_plaza
 
         # Botón para cargar eventos
-        if st.button("🔄 ACTUALIZAR EVENTOS", type="primary", use_container_width=True):
+        if sel_plaza and st.button("🔄 ACTUALIZAR EVENTOS", type="primary", use_container_width=True):
             st.session_state.selected_event = None
             st.session_state.search_results = get_records(base_id, table_id, sel_year, sel_plaza)
             st.session_state.current_base_id = base_id
@@ -234,30 +267,87 @@ else:
             st.session_state.current_plaza_view = sel_plaza
 
         st.divider()
-        st.caption(f"👤 {st.session_state.user_name}")
         if st.button("Cerrar Sesión"):
             st.session_state.logged_in = False
             st.rerun()
 
     # --- ÁREA PRINCIPAL ---
     
-    # Manejo de pestañas solo para Admin
+    # Definición de pestañas según ROL
     if st.session_state.user_role == "admin":
-        tab_main, tab_hist = st.tabs(["📂 Gestión de Eventos", "📜 Historial de Cambios"])
+        tab_main, tab_users, tab_hist = st.tabs(["📂 Gestión de Eventos", "👥 Administrar Usuarios", "📜 Historial Global"])
+        
+        # Pestaña 2: ADMINISTRAR USUARIOS
+        with tab_users:
+            st.subheader("Gestión de Accesos")
+            users_db = cargar_usuarios()
+            
+            # Formulario Alta/Edición
+            with st.expander("➕ Crear / Editar Usuario", expanded=True):
+                with st.form("user_mngt"):
+                    c1, c2 = st.columns(2)
+                    new_user = c1.text_input("Nombre de Usuario (ID):")
+                    new_pass = c2.text_input("Contraseña:", type="password")
+                    
+                    new_role = st.selectbox("Rol:", ["user", "admin"])
+                    
+                    # Multiselect con las sucursales oficiales
+                    new_plazas = st.multiselect(
+                        "Sucursales Permitidas:", 
+                        SUCURSALES_OFICIALES,
+                        help="Selecciona las plazas que este usuario puede ver y editar."
+                    )
+                    
+                    btn_save_user = st.form_submit_button("Guardar Usuario")
+                    
+                    if btn_save_user:
+                        if new_user and new_pass and new_plazas:
+                            users_db[new_user] = {
+                                "password": new_pass,
+                                "role": new_role,
+                                "plazas": new_plazas
+                            }
+                            guardar_usuarios(users_db)
+                            st.success(f"Usuario {new_user} actualizado correctamente.")
+                            registrar_historial("Admin User", st.session_state.user_name, "Admin Panel", f"Creó/Editó usuario {new_user}")
+                            st.rerun()
+                        else:
+                            st.error("Todos los campos son obligatorios.")
+
+            # Tabla de Usuarios Existentes
+            st.markdown("#### Usuarios Activos")
+            user_list = []
+            for u, data in users_db.items():
+                user_list.append({
+                    "Usuario": u,
+                    "Rol": data.get('role'),
+                    "Plazas": ", ".join(data.get('plazas', []))
+                })
+            st.dataframe(pd.DataFrame(user_list), use_container_width=True)
+
+
+        # Pestaña 3: HISTORIAL
         with tab_hist:
             if os.path.exists(HISTORIAL_FILE):
                 df_hist = pd.read_csv(HISTORIAL_FILE)
                 st.dataframe(df_hist.sort_values(by="Fecha", ascending=False), use_container_width=True)
             else:
                 st.info("Sin historial.")
+                
         main_area = tab_main
+
     else:
+        # Si es usuario normal, solo ve el área principal
         main_area = st.container()
 
+    # --- LÓGICA DE GESTIÓN DE EVENTOS (Común para todos) ---
     with main_area:
-        st.title(f"Gestión: {st.session_state.get('current_plaza_view', sel_plaza)}")
+        if 'current_plaza_view' in st.session_state:
+            st.title(f"Gestión: {st.session_state.current_plaza_view}")
+        else:
+            st.title("Gestor de Evidencias")
 
-        # VISTA A: TARJETAS DE EVENTOS
+        # VISTA A: LISTADO
         if st.session_state.selected_event is None:
             if 'search_results' in st.session_state:
                 recs = st.session_state.search_results
@@ -272,11 +362,12 @@ else:
                                 st.session_state.selected_event = r
                                 st.rerun()
                 else:
-                    st.info(f"No hay eventos programados en {sel_plaza} para esta fecha/mes.")
+                    if st.session_state.get('sucursal_actual'):
+                        st.info(f"No hay eventos encontrados en {st.session_state.sucursal_actual} con los filtros actuales.")
             else:
-                st.info("👈 Selecciona el Mes y pulsa 'ACTUALIZAR EVENTOS'.")
+                st.info("👈 Selecciona Plaza, Mes y pulsa 'ACTUALIZAR EVENTOS'.")
 
-        # VISTA B: FORMULARIO DE CARGA
+        # VISTA B: CARGA DE EVIDENCIA
         else:
             evt = st.session_state.selected_event
             fields = evt['fields']
@@ -293,7 +384,6 @@ else:
             """, unsafe_allow_html=True)
             
             with st.form("evidence_form"):
-                
                 uploads = {}
 
                 # 1. FOTO DE EQUIPO
