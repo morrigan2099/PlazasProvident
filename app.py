@@ -73,25 +73,66 @@ def get_tables(base_id):
     return {}
 
 def get_records(base_id, table_id, year, plaza):
-    """Filtra eventos por Año y Plaza"""
-    formula = f"AND(YEAR({{Fecha}})={year}, {{Sucursal}}='{plaza}')"
+    """
+    Obtiene TODOS los registros y filtra manualmente en Python 
+    para evitar errores de fórmulas de Airtable.
+    """
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
-    params = {"filterByFormula": formula, "sort[0][field]": "Fecha"}
+    
+    # 1. Traemos TODO sin filtrar por fórmula (más seguro)
     try:
-        r = requests.get(url, headers=headers, params=params)
-        if r.status_code == 200:
-            return r.json().get('records', [])
-    except: pass
-    return []
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            st.error(f"Error Airtable ({r.status_code}): {r.text}")
+            return []
+            
+        all_records = r.json().get('records', [])
+    except Exception as e:
+        st.error(f"Error de conexión: {e}")
+        return []
 
-def upload_evidence_to_airtable(base_id, table_id, record_id, updates_dict):
-    """Envía enlaces de fotos a Airtable"""
-    url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}"
-    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
-    data = {"fields": updates_dict}
-    r = requests.patch(url, json=data, headers=headers)
-    return r.status_code == 200
+    # 2. Filtramos en Python (Más flexible)
+    filtered_records = []
+    
+    for rec in all_records:
+        f = rec.get('fields', {})
+        
+        # --- A. VERIFICACIÓN DE FECHA ---
+        # Buscamos campos comunes de fecha si 'Fecha' no existe
+        fecha_str = f.get('Fecha') or f.get('Date') or f.get('Dia')
+        
+        match_year = False
+        if fecha_str:
+            try:
+                # Si es '2025-01-20', tomamos los primeros 4 chars
+                if str(fecha_str)[:4] == str(year):
+                    match_year = True
+            except: pass
+        
+        # --- B. VERIFICACIÓN DE SUCURSAL ---
+        # Buscamos campos comunes de lugar
+        suc_dato = f.get('Sucursal') or f.get('Plaza') or f.get('Lugar')
+        
+        match_plaza = False
+        if suc_dato:
+            # A veces Airtable devuelve listas si es un campo de enlace
+            val_suc = suc_dato[0] if isinstance(suc_dato, list) else suc_dato
+            
+            # Comparamos ignorando mayúsculas/minúsculas
+            if str(val_suc).strip().lower() == str(plaza).strip().lower():
+                match_plaza = True
+        
+        # Si cumple AMBOS (o si no hay fecha estricta, solo plaza), lo agregamos
+        if match_plaza and match_year:
+            filtered_records.append(rec)
+            
+    # Ordenar por fecha (opcional)
+    try:
+        filtered_records.sort(key=lambda x: x['fields'].get('Fecha', ''))
+    except: pass
+
+    return filtered_records
 
 # ==============================================================================
 # 3. GESTIÓN DE SESIÓN
