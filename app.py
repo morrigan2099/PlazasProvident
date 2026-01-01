@@ -80,7 +80,7 @@ def get_records(base_id, table_id, year, plaza):
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     
-    # 1. Traemos TODOS los datos de la tabla (sin filtrar por fórmula para evitar errores 422)
+    # 1. Traemos TODOS los datos de la tabla (sin filtrar por fórmula)
     try:
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
@@ -93,25 +93,22 @@ def get_records(base_id, table_id, year, plaza):
 
     filtered = []
     
-    # 2. Filtramos registro por registro
+    # 2. Filtramos registro por registro en Python
     for rec in data:
         fields = rec.get('fields', {})
         
         # --- FILTRO 1: FECHA ---
-        # Campo exacto: 'Fecha' (Formato YYYY-MM-DD)
         fecha_dato = fields.get('Fecha')
         match_year = False
         if fecha_dato and str(fecha_dato).startswith(str(year)):
             match_year = True
             
         # --- FILTRO 2: SUCURSAL ---
-        # Campo exacto: 'Sucursal'
         suc_dato = fields.get('Sucursal')
         match_plaza = False
         
         if suc_dato:
-            # Truco: Airtable a veces devuelve listas (['Veracruz']) o texto ('Veracruz')
-            # Esto lo unifica a texto simple para comparar
+            # Unifica si es lista (['Veracruz']) o texto ('Veracruz')
             if isinstance(suc_dato, list):
                 val_suc = str(suc_dato[0])
             else:
@@ -125,12 +122,20 @@ def get_records(base_id, table_id, year, plaza):
         if match_year and match_plaza:
             filtered.append(rec)
             
-    # Ordenar por fecha y hora (Opcional, para que salgan en orden)
+    # Ordenar por fecha y hora
     try:
         filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     except: pass
 
     return filtered
+
+def upload_evidence_to_airtable(base_id, table_id, record_id, updates_dict):
+    """Envía enlaces de fotos a Airtable"""
+    url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}"
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
+    data = {"fields": updates_dict}
+    r = requests.patch(url, json=data, headers=headers)
+    return r.status_code == 200
 
 # ==============================================================================
 # 3. GESTIÓN DE SESIÓN
@@ -153,7 +158,7 @@ if not st.session_state.logged_in:
         st.markdown("### 🔐 Acceso al Sistema")
         
         with st.form("login_form"):
-            # Selección de Plaza (Solo aquí se elige la plaza del usuario)
+            # El Admin TAMBIÉN selecciona aquí su plaza de trabajo
             sucursal_sel = st.selectbox("📍 Selecciona tu Plaza (Sucursal):", SUCURSALES)
             usuario_input = st.text_input("👤 Usuario:")
             
@@ -171,8 +176,8 @@ if not st.session_state.logged_in:
                         st.session_state.logged_in = True
                         st.session_state.user_role = "admin"
                         st.session_state.user_name = usuario_input
-                        st.session_state.sucursal_actual = sucursal_sel # El admin inicia en una plaza pero puede cambiar
-                        registrar_historial("Login Admin", usuario_input, "Global", "Acceso OK")
+                        st.session_state.sucursal_actual = sucursal_sel 
+                        registrar_historial("Login Admin", usuario_input, sucursal_sel, "Acceso OK")
                         st.rerun()
                     else:
                         st.error("Contraseña incorrecta.")
@@ -215,15 +220,10 @@ else:
         
         st.divider()
 
-        # 4. LÓGICA DE PLAZA (Clave del requerimiento)
-        if st.session_state.user_role == "admin":
-            # El administrador PUEDE ver el filtro y cambiarlo
-            st.subheader("🛠 Opciones de Admin")
-            sel_plaza = st.selectbox("Cambiar Plaza:", SUCURSALES, index=SUCURSALES.index(st.session_state.sucursal_actual) if st.session_state.sucursal_actual in SUCURSALES else 0)
-        else:
-            # El usuario NO ve el filtro, se usa su variable de sesión automática
-            sel_plaza = st.session_state.sucursal_actual
-            st.info(f"📍 Plaza Fija: **{sel_plaza}**")
+        # 4. PLAZA FIJA (Ya no hay selector extra)
+        # Se usa la plaza seleccionada en el Login
+        sel_plaza = st.session_state.sucursal_actual
+        st.info(f"📍 Plaza: **{sel_plaza}**")
 
         # Botón para cargar eventos
         if st.button("🔄 ACTUALIZAR EVENTOS", type="primary", use_container_width=True):
@@ -257,14 +257,13 @@ else:
     with main_area:
         st.title(f"Gestión: {st.session_state.get('current_plaza_view', sel_plaza)}")
 
-        # VISTA A: TARJETAS DE EVENTOS (NO TABLAS)
+        # VISTA A: TARJETAS DE EVENTOS
         if st.session_state.selected_event is None:
             if 'search_results' in st.session_state:
                 recs = st.session_state.search_results
                 if recs:
                     for r in recs:
                         f = r['fields']
-                        # Usamos Expander para que parezca una tarjeta limpia
                         with st.expander(f"📅 {f.get('Fecha')} | {f.get('Tipo', 'Evento')}"):
                             c1, c2, c3 = st.columns([2, 2, 1])
                             c1.markdown(f"**Hora:** {f.get('Hora', '--')}")
@@ -273,7 +272,7 @@ else:
                                 st.session_state.selected_event = r
                                 st.rerun()
                 else:
-                    st.info(f"No hay eventos programados en {sel_plaza} para esta fecha.")
+                    st.info(f"No hay eventos programados en {sel_plaza} para esta fecha/mes.")
             else:
                 st.info("👈 Selecciona el Mes y pulsa 'ACTUALIZAR EVENTOS'.")
 
