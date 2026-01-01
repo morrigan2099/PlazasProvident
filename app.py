@@ -33,7 +33,7 @@ cloudinary.config(
 
 # --- SUCURSALES (Definición Oficial) ---
 SUCURSALES_OFICIALES = [
-    "Cordoba", "Orizaba", "Xalapa", "Puebla", 
+    "Cordoba", "Orizaba", "Xalapa", "Tehuacan", 
     "Oaxaca", "Tuxtepec", "Boca del Río"
 ]
 
