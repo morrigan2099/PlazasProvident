@@ -32,7 +32,7 @@ MASTER_ADMIN_PASS = "3spejoVenenoso$2099"
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 
 FILES_DB = "usuarios.json"
-CONFIG_DB = "config_airtable.json" # NUEVO ARCHIVO DE CONFIGURACIÓN
+CONFIG_DB = "config_airtable.json"
 HISTORIAL_FILE = "historial_modificaciones.csv"
 YEAR_ACTUAL = 2025 
 
@@ -91,18 +91,12 @@ def cargar_usuarios():
 def guardar_usuarios(db):
     with open(FILES_DB, 'w') as f: json.dump(db, f)
 
-# --- NUEVAS FUNCIONES PARA CONFIGURACIÓN DE BASES ---
 def cargar_config_db():
-    """Carga la lista blanca de bases y tablas"""
-    if not os.path.exists(CONFIG_DB):
-        return {} # Si no existe, retorna vacío
-    with open(CONFIG_DB, 'r') as f:
-        return json.load(f)
+    if not os.path.exists(CONFIG_DB): return {} 
+    with open(CONFIG_DB, 'r') as f: return json.load(f)
 
 def guardar_config_db(config_data):
-    """Guarda la configuración definida por el admin"""
-    with open(CONFIG_DB, 'w') as f:
-        json.dump(config_data, f)
+    with open(CONFIG_DB, 'w') as f: json.dump(config_data, f)
 
 def registrar_historial(accion, usuario, sucursal, detalles):
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -118,10 +112,8 @@ def check_evidencia_completa(fields):
     return False
 
 # ==============================================================================
-# 3. FUNCIONES AIRTABLE (API REAL VS CONFIGURACIÓN)
+# 3. FUNCIONES AIRTABLE
 # ==============================================================================
-
-# A. FUNCIONES "RAW" (Consultas reales a la API - Solo para el panel de Configuración)
 def api_get_all_bases():
     url = "https://api.airtable.com/v0/meta/bases"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
@@ -140,15 +132,11 @@ def api_get_all_tables(base_id):
     except: pass
     return {}
 
-# B. FUNCIONES "FILTRADAS" (Para los selectores de la App)
 def get_authorized_bases():
-    """Retorna SOLO las bases guardadas en config_airtable.json"""
     config = cargar_config_db()
-    # Estructura esperada: {"bases": {"NombreBase": "ID"}, "tables": {"BaseID": {"NomTabla": "ID"}}}
     return config.get("bases", {})
 
 def get_authorized_tables(base_id):
-    """Retorna SOLO las tablas autorizadas para esa base"""
     config = cargar_config_db()
     all_tables_config = config.get("tables", {})
     return all_tables_config.get(base_id, {})
@@ -245,239 +233,187 @@ else:
             st.rerun()
     st.divider()
 
-    # --- TOPBAR FILTROS (AHORA USAN get_authorized_bases) ---
+    # TOPBAR
     with st.container():
         col_base, col_mes, col_plaza, col_btn = st.columns([2, 2, 2, 2])
-        
-        # 1. BASES AUTORIZADAS
         with col_base:
             bases_map = get_authorized_bases()
-            if not bases_map:
-                st.warning("⚠️ Sin bases configuradas")
-                base_id = None
-            else:
-                base_name = st.selectbox("📂 Base de Datos", list(bases_map.keys()))
-                base_id = bases_map[base_name]
-
-        # 2. TABLAS AUTORIZADAS
+            if not bases_map: st.warning("⚠️ Sin bases"); base_id = None
+            else: base_name = st.selectbox("📂 Base de Datos", list(bases_map.keys())); base_id = bases_map[base_name]
         with col_mes:
             if base_id:
                 tables_map = get_authorized_tables(base_id)
-                if tables_map:
-                    table_name = st.selectbox("📅 Mes", list(tables_map.keys()))
-                    table_id = tables_map[table_name]
-                else:
-                    st.warning("⚠️ Sin tablas autorizadas")
-                    table_id = None
-            else:
-                st.selectbox("📅 Mes", [], disabled=True)
-                table_id = None
-
-        # 3. PLAZA
+                if tables_map: table_name = st.selectbox("📅 Mes", list(tables_map.keys())); table_id = tables_map[table_name]
+                else: table_id = None
+            else: st.selectbox("📅 Mes", [], disabled=True); table_id = None
         with col_plaza:
             plazas_permitidas = st.session_state.allowed_plazas
             sel_plaza = st.selectbox("📍 Plaza", plazas_permitidas) if plazas_permitidas else None
             if sel_plaza: st.session_state.sucursal_actual = sel_plaza
-        
-        # 4. BOTÓN
         with col_btn:
-            st.write("")
-            st.write("")
+            st.write(""); st.write("")
             if sel_plaza and base_id and table_id and st.button("🔄 CARGAR EVENTOS", type="primary", use_container_width=True):
-                st.session_state.selected_event = None
-                st.session_state.rescheduling_event = None
+                st.session_state.selected_event = None; st.session_state.rescheduling_event = None
                 st.session_state.search_results = get_records(base_id, table_id, YEAR_ACTUAL, sel_plaza)
-                st.session_state.current_base_id = base_id
-                st.session_state.current_table_id = table_id
-                st.session_state.current_plaza_view = sel_plaza
-
+                st.session_state.current_base_id = base_id; st.session_state.current_table_id = table_id; st.session_state.current_plaza_view = sel_plaza
     st.divider()
 
-    # --- PANEL DE ADMINISTRACIÓN ---
+    # --- PESTAÑAS ADMIN ---
     if st.session_state.user_role == "admin":
-        # AGREGAMOS PESTAÑA DE CONFIG DB
         tab_main, tab_users, tab_config_db, tab_hist = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Configuración DB", "📜 Historial"])
         
+        # --- TAB USUARIOS (MEJORADO: CREAR / EDITAR) ---
         with tab_users:
             users_db = cargar_usuarios()
-            with st.expander("➕ Crear/Editar Usuario"):
-                with st.form("user_mngt"):
-                    c1, c2 = st.columns(2)
-                    nu = c1.text_input("Usuario")
-                    np = c2.text_input("Pass", type="password")
-                    nr = st.selectbox("Rol", ["user", "admin"])
-                    npl = st.multiselect("Plazas", SUCURSALES_OFICIALES)
-                    if st.form_submit_button("Guardar"):
-                        users_db[nu] = {"password": np, "role": nr, "plazas": npl}
+            st.subheader("Gestión de Accesos")
+            
+            # 1. SELECTOR DE ACCIÓN
+            opciones_usuarios = ["(Crear Nuevo)"] + list(users_db.keys())
+            seleccion = st.selectbox("🔍 Seleccionar Usuario para Editar:", opciones_usuarios)
+            
+            # 2. DEFINIR VALORES POR DEFECTO SEGÚN SELECCIÓN
+            if seleccion == "(Crear Nuevo)":
+                val_user = ""
+                val_pass = ""
+                val_role = "user"
+                val_plazas = []
+                es_edicion = False
+            else:
+                data_u = users_db[seleccion]
+                val_user = seleccion
+                val_pass = data_u.get('password', '')
+                val_role = data_u.get('role', 'user')
+                val_plazas = data_u.get('plazas', [])
+                es_edicion = True
+
+            # 3. FORMULARIO DINÁMICO
+            with st.form("form_usuarios_admin"):
+                c1, c2 = st.columns(2)
+                # Input Usuario: Si es edición, permitimos cambiarlo (renombrar)
+                new_user = c1.text_input("Usuario (ID)", value=val_user)
+                new_pass = c2.text_input("Contraseña", value=val_pass) # type="password" opcional si quieres verla
+                
+                c3, c4 = st.columns(2)
+                new_role = c3.selectbox("Rol", ["user", "admin"], index=0 if val_role=="user" else 1)
+                new_plazas = c4.multiselect("Plazas Permitidas", SUCURSALES_OFICIALES, default=[p for p in val_plazas if p in SUCURSALES_OFICIALES])
+                
+                # BOTONES
+                st.markdown("<br>", unsafe_allow_html=True)
+                cols_btns = st.columns([1, 1, 4])
+                
+                submitted = cols_btns[0].form_submit_button("💾 Guardar Datos", type="primary")
+                
+                # Para eliminar, usamos checkbox dentro del form o botón fuera.
+                # Streamlit forms no soportan multiples botones submit con logica distinta facil.
+                # Usaremos logica post-submit.
+                
+                if submitted:
+                    if not new_user or not new_pass:
+                        st.error("Usuario y contraseña son obligatorios.")
+                    else:
+                        # Si es edición y cambió el nombre, borramos el anterior
+                        if es_edicion and new_user != seleccion:
+                            del users_db[seleccion]
+                            st.info(f"Usuario renombrado: {seleccion} -> {new_user}")
+                        
+                        # Guardar/Actualizar
+                        users_db[new_user] = {
+                            "password": new_pass,
+                            "role": new_role,
+                            "plazas": new_plazas
+                        }
                         guardar_usuarios(users_db)
-                        st.success("Guardado")
+                        st.success(f"Usuario {new_user} guardado correctamente.")
                         st.rerun()
-            st.dataframe(pd.DataFrame([{"U":k, "R":v['role'], "P":v['plazas']} for k,v in users_db.items()]), use_container_width=True)
-        
-        # --- NUEVA PESTAÑA: CONFIGURACIÓN DB ---
+
+            # BOTÓN DE ELIMINAR (FUERA DEL FORM PARA EVITAR CONFLICTOS)
+            if es_edicion:
+                st.markdown("---")
+                col_del_1, col_del_2 = st.columns([1, 4])
+                if col_del_1.button("🗑️ Eliminar Usuario", type="secondary"):
+                    if seleccion in users_db:
+                        del users_db[seleccion]
+                        guardar_usuarios(users_db)
+                        st.warning(f"Usuario {seleccion} eliminado.")
+                        st.rerun()
+
+            st.markdown("---")
+            st.markdown("#### Lista de Usuarios Activos")
+            df_users = pd.DataFrame([{"Usuario": k, "Rol": v['role'], "Plazas": ", ".join(v['plazas'])} for k,v in users_db.items()])
+            st.dataframe(df_users, use_container_width=True)
+
+        # --- TAB CONFIG DB ---
         with tab_config_db:
             st.subheader("Control de Visibilidad de Base de Datos")
-            st.info("Selecciona qué Bases y Tablas aparecerán en los menús de la aplicación.")
-            
-            # 1. Cargar configuración actual
-            current_config = cargar_config_db()
-            current_bases = current_config.get("bases", {})
-            current_tables = current_config.get("tables", {})
-
-            # 2. Consultar API Real para ver qué existe
-            with st.spinner("Consultando Airtable..."):
-                real_bases = api_get_all_bases()
-
-            if not real_bases:
-                st.error("No se pudo conectar con Airtable para obtener la lista maestra.")
-            else:
+            current_config = cargar_config_db(); current_bases = current_config.get("bases", {}); current_tables = current_config.get("tables", {})
+            with st.spinner("Conectando Airtable..."): real_bases = api_get_all_bases()
+            if real_bases:
                 with st.form("db_config_form"):
-                    
-                    # Selección de Bases
-                    st.markdown("#### 1. Bases de Datos Disponibles")
-                    bases_selected_names = st.multiselect(
-                        "Selecciona las bases a mostrar:", 
-                        options=list(real_bases.keys()),
-                        default=[name for name in list(real_bases.keys()) if name in current_bases]
-                    )
-
-                    new_bases_config = {}
-                    new_tables_config = {}
-
-                    st.markdown("---")
-                    st.markdown("#### 2. Tablas por Base")
-                    
-                    # Para cada base seleccionada, mostramos sus tablas
-                    for b_name in bases_selected_names:
-                        b_id = real_bases[b_name]
-                        new_bases_config[b_name] = b_id
-                        
-                        st.caption(f"📂 **{b_name}**")
-                        
-                        # Consultar tablas reales de esta base
-                        real_tables = api_get_all_tables(b_id)
-                        
-                        # Recuperar selección previa
-                        prev_tables_for_base = current_tables.get(b_id, {})
-                        
-                        tables_selected_names = st.multiselect(
-                            f"Tablas visibles para '{b_name}':",
-                            options=list(real_tables.keys()),
-                            default=[name for name in list(real_tables.keys()) if name in prev_tables_for_base],
-                            key=f"sel_{b_id}"
-                        )
-                        
-                        # Guardar configuración de tablas para esta base
-                        new_tables_config[b_id] = {t_name: real_tables[t_name] for t_name in tables_selected_names}
-                        st.write("") # Espacio
-                    
-                    st.markdown("---")
-                    if st.form_submit_button("💾 GUARDAR CONFIGURACIÓN DE VISIBILIDAD"):
-                        final_config = {
-                            "bases": new_bases_config,
-                            "tables": new_tables_config
-                        }
-                        guardar_config_db(final_config)
-                        st.success("✅ Configuración actualizada. Los selectores ahora solo mostrarán lo seleccionado.")
-                        st.rerun()
+                    bases_sel = st.multiselect("Bases Visibles:", list(real_bases.keys()), default=[n for n in real_bases if n in current_bases])
+                    new_b = {}; new_t = {}
+                    for b_name in bases_sel:
+                        b_id = real_bases[b_name]; new_b[b_name] = b_id
+                        real_tables = api_get_all_tables(b_id); prev_t = current_tables.get(b_id, {})
+                        t_sel = st.multiselect(f"Tablas para {b_name}:", list(real_tables.keys()), default=[n for n in real_tables if n in prev_t])
+                        new_t[b_id] = {n: real_tables[n] for n in t_sel}
+                    if st.form_submit_button("💾 Guardar Configuración"):
+                        guardar_config_db({"bases": new_b, "tables": new_t}); st.success("Guardado."); st.rerun()
 
         with tab_hist:
              if os.path.exists(HISTORIAL_FILE): st.dataframe(pd.read_csv(HISTORIAL_FILE).sort_values("Fecha", ascending=False), use_container_width=True)
-        
         main_area = tab_main
     else: main_area = st.container()
 
-    # VISTAS PRINCIPALES (SIN CAMBIOS EN LÓGICA, SOLO VISUALIZACIÓN)
+    # VISTAS PRINCIPALES
     with main_area:
         if 'current_plaza_view' in st.session_state:
             st.markdown(f"### 📋 Eventos en {st.session_state.current_plaza_view} ({YEAR_ACTUAL})")
 
-        # 1. LISTADO (Default)
+        # 1. LISTADO
         if st.session_state.selected_event is None and st.session_state.rescheduling_event is None:
             if 'search_results' in st.session_state:
                 recs = st.session_state.search_results
                 if recs:
                     for r in recs:
-                        f = r['fields']
-                        ya_tiene_evidencia = check_evidencia_completa(f)
+                        f = r['fields']; ya_tiene = check_evidencia_completa(f)
                         with st.expander(f"{f.get('Fecha')} | {f.get('Tipo', 'Evento')}", expanded=True):
                             col_img, col_data = st.columns([1, 2.5])
-                            with col_img:
-                                img_path = get_imagen_plantilla(f.get('Tipo'))
-                                st.image(img_path, use_container_width=True)
+                            with col_img: st.image(get_imagen_plantilla(f.get('Tipo')), use_container_width=True)
                             with col_data:
-                                fecha_fmt = formatear_fecha_larga(f.get('Fecha'))
-                                st.markdown(f"### 🗓️ {fecha_fmt}")
-                                st.markdown(f"**📌 Tipo:** {f.get('Tipo', '--')}")
-                                st.markdown(f"**📍 Punto:** {f.get('Punto de reunion', 'N/A')}")
-                                st.markdown(f"**🛣️ Ruta:** {f.get('Ruta a seguir', 'N/A')}")
-                                st.markdown(f"**🏙️ Municipio:** {f.get('Municipio', 'N/A')}")
-                                st.markdown(f"**⏰ Hora:** {f.get('Hora', '--')}")
-                                st.markdown("<br>", unsafe_allow_html=True)
-                                cb1, cb2 = st.columns(2)
-                                with cb1:
-                                    if st.button("📸 SUBIR EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True):
-                                        st.session_state.selected_event = r
-                                        st.rerun()
-                                if not ya_tiene_evidencia:
-                                    with cb2:
-                                        if st.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True):
-                                            st.session_state.rescheduling_event = r
-                                            st.rerun()
-                else:
+                                st.markdown(f"### 🗓️ {formatear_fecha_larga(f.get('Fecha'))}")
+                                st.markdown(f"**📌 Tipo:** {f.get('Tipo','--')}\n**📍 Punto:** {f.get('Punto de reunion','--')}\n**🛣️ Ruta:** {f.get('Ruta a seguir','--')}\n**🏙️ Muni:** {f.get('Municipio','--')}\n**⏰ Hora:** {f.get('Hora','--')}")
+                                st.markdown("<br>",unsafe_allow_html=True)
+                                c1,c2=st.columns(2)
+                                if c1.button("📸 SUBIR EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True): st.session_state.selected_event=r; st.rerun()
+                                if not ya_tiene:
+                                    if c2.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True): st.session_state.rescheduling_event=r; st.rerun()
+                else: 
                     if st.session_state.get('sucursal_actual'): st.info("No hay eventos.")
-                    else: st.warning("Carga eventos primero.")
+                    else: st.warning("Carga eventos.")
             else: st.info("👆 Cargar eventos.")
 
-        # 2. VISTA REAGENDAR
+        # 2. REAGENDAR
         elif st.session_state.rescheduling_event is not None:
-            evt = st.session_state.rescheduling_event
-            f_orig = evt['fields']
-            if st.button("⬅️ CANCELAR REAGENDADO"):
-                st.session_state.rescheduling_event = None
-                st.rerun()
-            st.markdown("### ⚠️ Reagendar Evento"); st.info("Ingresa los nuevos datos.")
+            evt = st.session_state.rescheduling_event; f_orig = evt['fields']
+            if st.button("⬅️ CANCELAR"): st.session_state.rescheduling_event = None; st.rerun()
+            st.markdown("### ⚠️ Reagendar Evento")
             with st.form("reschedule_form"):
                 c1, c2, c3 = st.columns(3)
-                try: fecha_obj = datetime.strptime(f_orig.get('Fecha', datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d")
-                except: fecha_obj = datetime.now()
-                with c1:
-                    new_fecha = st.date_input("Fecha", value=fecha_obj)
-                    new_tipo = st.text_input("Tipo", value=f_orig.get('Tipo', ''))
-                    new_seccion = st.text_input("Sección", value=f_orig.get('Seccion', ''))
-                    new_am = st.text_input("AM Responsable", value=f_orig.get('AM Responsable', ''))
-                    new_dm = st.text_input("DM Responsable", value=f_orig.get('DM Responsable', ''))
-                with c2:
-                    new_hora = st.text_input("Hora", value=f_orig.get('Hora', '09:00'))
-                    new_suc = st.text_input("Sucursal", value=f_orig.get('Sucursal', st.session_state.sucursal_actual))
-                    new_ruta = st.text_input("Ruta a seguir", value=f_orig.get('Ruta a seguir', ''))
-                    new_tel_am = st.text_input("Teléfono AM", value=f_orig.get('Teléfono AM', ''))
-                    new_tel_dm = st.text_input("Teléfono DM", value=f_orig.get('Teléfono DM', ''))
-                with c3:
-                    new_muni = st.text_input("Municipio", value=f_orig.get('Municipio', ''))
-                    new_punto = st.text_input("Punto de reunión", value=f_orig.get('Punto de reunion', ''))
-                    new_cant = st.text_input("Cantidad", value=f_orig.get('Cantidad', ''))
-                st.markdown("<br>", unsafe_allow_html=True)
+                try: fd = datetime.strptime(f_orig.get('Fecha', datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d")
+                except: fd = datetime.now()
+                with c1: nf=st.date_input("Fecha",value=fd); nt=st.text_input("Tipo",value=f_orig.get('Tipo','')); ns=st.text_input("Sección",value=f_orig.get('Seccion','')); nam=st.text_input("AM",value=f_orig.get('AM Responsable','')); ndm=st.text_input("DM",value=f_orig.get('DM Responsable',''))
+                with c2: nh=st.text_input("Hora",value=f_orig.get('Hora','09:00')); nsu=st.text_input("Sucursal",value=f_orig.get('Sucursal',st.session_state.sucursal_actual)); nr=st.text_input("Ruta",value=f_orig.get('Ruta a seguir','')); ntam=st.text_input("Tel AM",value=f_orig.get('Teléfono AM','')); ntdm=st.text_input("Tel DM",value=f_orig.get('Teléfono DM',''))
+                with c3: nm=st.text_input("Municipio",value=f_orig.get('Municipio','')); np=st.text_input("Punto",value=f_orig.get('Punto de reunion','')); nc=st.text_input("Cantidad",value=f_orig.get('Cantidad',''))
+                st.markdown("<br>",unsafe_allow_html=True)
                 if st.form_submit_button("💾 GUARDAR NUEVA FECHA", type="primary", use_container_width=True):
-                    nuevo_registro_limpio = {
-                        "Fecha": new_fecha.strftime("%Y-%m-%d"), "Hora": new_hora, "Tipo": new_tipo,
-                        "Sucursal": new_suc, "Seccion": new_seccion, "Ruta a seguir": new_ruta,
-                        "Punto de reunion": new_punto, "Municipio": f"{new_muni} (Evento Reagendado)",
-                        "Cantidad": new_cant, "AM Responsable": new_am, "Teléfono AM": new_tel_am,
-                        "DM Responsable": new_dm, "Teléfono DM": new_tel_dm
-                    }
-                    exito, resp = create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, nuevo_registro_limpio)
-                    if exito:
-                        st.success("✅ Reagendado creado."); registrar_historial("Reagendar", st.session_state.user_name, new_suc, f"Original: {f_orig.get('Fecha')} -> Nueva: {new_fecha}")
-                        st.session_state.rescheduling_event = None
-                        st.session_state.search_results = get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view)
-                        st.rerun()
-                    else: st.error(f"Error al crear: {resp}")
+                    new_reg = {"Fecha":nf.strftime("%Y-%m-%d"),"Hora":nh,"Tipo":nt,"Sucursal":nsu,"Seccion":ns,"Ruta a seguir":nr,"Punto de reunion":np,"Municipio":f"{nm} (Evento Reagendado)","Cantidad":nc,"AM Responsable":nam,"Teléfono AM":ntam,"DM Responsable":ndm,"Teléfono DM":ntdm}
+                    ex, rs = create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)
+                    if ex: st.success("✅ Creado."); registrar_historial("Reagendar",st.session_state.user_name,nsu,f"Orig:{f_orig.get('Fecha')}->New:{nf}"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id,st.session_state.current_table_id,YEAR_ACTUAL,st.session_state.current_plaza_view); st.rerun()
+                    else: st.error(f"Error: {rs}")
 
-        # 3. VISTA CARGA
+        # 3. CARGA
         else:
-            evt = st.session_state.selected_event
-            fields = evt['fields']
+            evt = st.session_state.selected_event; fields = evt['fields']
             if st.button("⬅️ REGRESAR"): st.session_state.selected_event = None; st.rerun()
             st.markdown(f"### 📸 Cargar Evidencia: {fields.get('Tipo')}")
             with st.form("upload_form"):
@@ -497,13 +433,11 @@ else:
                     st.caption("4. Lista"); c5,c6=st.columns([3,1]); uploads['Lista de asistencia']=c5.file_uploader("Lis",key="ul",label_visibility="collapsed")
                     if fields.get('Lista de asistencia'): c6.image(fields['Lista de asistencia'][0]['url'],width=80)
                 if st.form_submit_button("💾 GUARDAR", type="primary", use_container_width=True):
-                    files={k:v for k,v in uploads.items() if v}
+                    files={k:v for k,v in uploads.items() if v}; pr=st.progress(0); ud={}; tot=len(files)
                     if not files: st.warning("Nada para subir")
                     else:
-                        pr=st.progress(0); ud={}; tot=len(files)
                         try:
                             for i,(k,f) in enumerate(files.items()): r=cloudinary.uploader.upload(f); ud[k]=[{"url":r['secure_url']}]; pr.progress((i+1)/(tot+1))
-                            if upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], ud):
-                                st.success("¡Listo!"); st.session_state.selected_event['fields'].update(ud); st.rerun()
+                            if upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], ud): st.success("¡Listo!"); st.session_state.selected_event['fields'].update(ud); st.rerun()
                             else: st.error("Error Airtable")
                         except Exception as e: st.error(str(e))
