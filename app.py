@@ -18,29 +18,6 @@ import base64
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
-# JS PARA NOTIFICACIONES DE NAVEGADOR
-st.markdown("""
-<script>
-    function requestNotificationPermission() {
-        if (!("Notification" in window)) {
-            alert("Este navegador no soporta notificaciones de escritorio");
-        } else if (Notification.permission !== "denied") {
-            Notification.requestPermission();
-        }
-    }
-    requestNotificationPermission();
-    
-    function sendNotification() {
-        if (Notification.permission === "granted") {
-            new Notification("🔐 GESTOR PROVIDENT", {
-                body: "¡Nueva solicitud de desbloqueo recibida!",
-                icon: "https://cdn-icons-png.flaticon.com/512/1827/1827301.png"
-            });
-        }
-    }
-</script>
-""", unsafe_allow_html=True)
-
 st.markdown("""
 <style>
     /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
@@ -58,11 +35,6 @@ st.markdown("""
         .logo-light { display: none !important; }
         .logo-dark { display: block !important; }
     }
-
-    /* Caso 2: Detectado por Configuración de Streamlit */
-    [data-theme="dark"] .logo-light { display: none !important; }
-    [data-theme="dark"] .logo-dark { display: block !important; }
-
     /* ESTILOS GENERALES */
     .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
     .streamlit-expanderContent { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #333333 !important; border-top: none !important; }
@@ -73,15 +45,8 @@ st.markdown("""
     .stButton button[kind="primary"] p { color: #ffffff !important; }
     .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
     
-    /* UPLOADER: BOTÓN AZUL SÓLIDO */
-    [data-testid="stFileUploader"] section { 
-        min-height: 0px !important; padding: 15px !important; 
-        background-color: #00b0ff !important; border: none !important; border-radius: 12px; 
-        display: flex; align-items: center; justify-content: center; cursor: pointer;
-    }
-    [data-testid="stFileUploader"] section::after { content: "➕"; font-size: 35px; color: white !important; font-weight: 900 !important; display: block; }
-    [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
-
+    [data-testid="stFileUploader"] section { min-height: 0px !important; padding: 10px !important; border: 2px dashed #00b0ff !important; }
+    [data-testid="stFileUploader"] section::after { content: "➕"; font-size: 32px; color: #00b0ff !important; display: block; }
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
     .compact-md p { margin-bottom: 0px !important; line-height: 1.4 !important; }
 </style>
@@ -95,12 +60,16 @@ CLOUDINARY_CONFIG = {
 }
 AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87ad1f2d71bfe853ce9783"
 
+# --- 🔔 TELEGRAM CONFIG (TUS DATOS) ---
+TELEGRAM_TOKEN = "8282197056:AAGMNd3kSJThY2_RN-Umk9fAlJ3a2NECpcE"
+TELEGRAM_CHAT_ID = "1858285363"
+
 # --- CONFIGURACIÓN BASE MAESTRA ---
 ADMIN_BASE_ID = "appRF7jHcmBJZA1px"
 USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"
 CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"
 BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd" 
-HISTORY_TABLE_ID = "tblmy6hL3VXQM5883" 
+HISTORY_TABLE_ID = "tblmy6hL3VXQM5883"
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
@@ -196,6 +165,15 @@ def airtable_request(method, url, data=None, params=None):
         st.error(f"❌ Error de Conexión Python: {str(e)}")
         return None
 
+# --- TELEGRAM ALERT ---
+def enviar_alerta_telegram(mensaje):
+    """Envía notificación Push al Telegram del Admin"""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
+        requests.post(url, json=payload)
+    except: pass # Si falla telegram, no romper la app
+
 # --- AUDITORÍA / LOGS ---
 def registrar_historial(accion, detalles):
     if "tbl" not in HISTORY_TABLE_ID: return 
@@ -248,7 +226,7 @@ def get_all_pending_requests():
                     pending_list.append(rec)
     return pending_list
 
-# --- LÓGICA DE RESPALDO BLINDADA ---
+# --- LÓGICA DE RESPALDO ---
 def crear_respaldo_evento(fields_original):
     campos_copiar = ["Tipo", "Fecha", "Hora", "Sucursal", "Seccion", "Ruta a seguir", "Punto de reunion", "Municipio", "Cantidad", "AM Responsable", "DM Responsable", "Teléfono AM", "Teléfono DM", "Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]
     new_data = {}
@@ -264,10 +242,14 @@ def crear_respaldo_evento(fields_original):
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{BACKUP_TABLE_ID}"
     return airtable_request("POST", url, {"fields": new_data})
 
-def solicitar_desbloqueo(base_id, table_id, record_id):
+def solicitar_desbloqueo(base_id, table_id, record_id, campos):
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}"
     resp = airtable_request("PATCH", url, {"fields": {"Estado_Bloqueo": "Solicitado"}})
-    if resp and resp.status_code == 200: registrar_historial("Solicitud Permiso", f"Record ID: {record_id}")
+    if resp and resp.status_code == 200: 
+        registrar_historial("Solicitud Permiso", f"Record ID: {record_id}")
+        # ENVIO DE TELEGRAM
+        msg = f"🔔 *SOLICITUD DE DESBLOQUEO*\n\n👤 *Usuario:* {st.session_state.user_name}\n📍 *Sucursal:* {campos.get('Sucursal')}\n📅 *Fecha:* {campos.get('Fecha')}\n📌 *Evento:* {campos.get('Tipo')}"
+        enviar_alerta_telegram(msg)
     return resp
 
 def aprobar_desbloqueo_admin(base_id, table_id, record_full_data):
@@ -418,8 +400,7 @@ else:
         label_solicitudes = f"🔐 Solicitudes ({count_pending}) 🔴" if count_pending > 0 else "🔐 Solicitudes"
         if count_pending > 0:
             st.toast(f"🔔 ¡ATENCIÓN! HAY {count_pending} SOLICITUDES DE PERMISO", icon="🚨")
-            # Inyección de sonido y trigger de notificación JS
-            st.markdown("""<audio autoplay><source src="https://upload.wikimedia.org/wikipedia/commons/0/05/Beep-09.ogg" type="audio/ogg"></audio><script>sendNotification();</script>""", unsafe_allow_html=True)
+            st.markdown("""<audio autoplay><source src="https://upload.wikimedia.org/wikipedia/commons/0/05/Beep-09.ogg" type="audio/ogg"></audio>""", unsafe_allow_html=True)
 
         tm, tu, tc, ta, th = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Config", label_solicitudes, "📜 Historial"])
         
@@ -452,16 +433,14 @@ else:
         with ta:
             st.subheader("🔐 Todas las Solicitudes Pendientes (Global)")
             
-            # --- MONITOR EN VIVO (REFRESH AUTOMÁTICO ADMIN) ---
-            monitor_activo = st.checkbox("🔄 Activar Monitor en Vivo", value=False)
+            # --- MONITOR EN VIVO ---
+            monitor_activo = st.checkbox("🔄 Activar Monitor en Vivo (Sonido activado)", value=False)
             if monitor_activo:
-                time.sleep(5)
-                st.rerun()
+                time.sleep(5); st.rerun()
                 
             if st.button("🔄 Actualizar Lista Manual"): st.rerun()
             
-            if not all_pending:
-                st.info("✅ No hay solicitudes pendientes.")
+            if not all_pending: st.info("✅ No hay solicitudes pendientes.")
             else:
                 for p in all_pending:
                     pf = p['fields']; meta = p['metadata']
@@ -504,7 +483,6 @@ else:
                         f = r['fields']; esta_completo = check_evidencia_completa(f)
                         estado_bloqueo = f.get('Estado_Bloqueo')
                         
-                        # LOGICA: Bloqueo SOLO si está completo Y no desbloqueado
                         bloqueado = False
                         icon_lock = ""
                         if esta_completo:
@@ -568,8 +546,9 @@ else:
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
                         with st.spinner("Enviando..."):
-                            resp = solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'])
+                            resp = solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], f)
                             if resp and resp.status_code==200: st.success("Enviado."); st.rerun()
+                            else: pass 
             else:
                 if esta_completo and estado == 'Desbloqueado':
                      st.toast("🔓 ¡PERMISO CONCEDIDO!", icon="✅")
