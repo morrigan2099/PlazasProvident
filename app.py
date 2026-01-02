@@ -24,22 +24,14 @@ st.markdown("""
     /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
     
     /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
-    /* Aquí mostramos el lightlogo.png y ocultamos el darklogo.png */
-    .logo-light { display: block; }
-    .logo-dark { display: none; }
+    .logo-light { display: none; }
+    .logo-dark { display: block; }
 
     /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
-    /* Aquí invertimos: Ocultamos light, Mostramos dark */
-    
-    /* Caso 1: Detectado por Sistema Operativo (Móvil) */
     @media (prefers-color-scheme: dark) {
-        .logo-light { display: none !important; }
-        .logo-dark { display: block !important; }
+        .logo-light { display: block !important; }
+        .logo-dark { display: none !important; }
     }
-
-    /* Caso 2: Detectado por Configuración de Streamlit */
-    [data-theme="dark"] .logo-light { display: none !important; }
-    [data-theme="dark"] .logo-dark { display: block !important; }
     /* ESTILOS GENERALES */
     .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
     .streamlit-expanderContent { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #333333 !important; border-top: none !important; }
@@ -94,7 +86,7 @@ BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd"
 HISTORY_TABLE_ID = "tblmy6hL3VXQM5883"
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
-YEAR_ACTUAL = 2025 
+# YEAR_ACTUAL ELIMINADO PARA QUE NO FILTRE POR AÑO
 
 cloudinary.config(
     cloud_name=CLOUDINARY_CONFIG["cloud_name"],
@@ -226,16 +218,18 @@ def api_get_all_tables(base_id):
     r = airtable_request("GET", f"https://api.airtable.com/v0/meta/bases/{base_id}/tables")
     return {t['name']: t['id'] for t in r.json().get('tables', [])} if r and r.status_code==200 else {}
 
-def get_records(base_id, table_id, year, plaza):
+# --- MODIFICADO: YA NO FILTRA POR AÑO, SOLO POR PLAZA ---
+def get_records(base_id, table_id, plaza):
     r = airtable_request("GET", f"https://api.airtable.com/v0/{base_id}/{table_id}")
     if not r or r.status_code != 200: return []
     filtered = []; plaza_norm = normalizar_texto_simple(plaza)
     for rec in r.json().get('records', []):
         f = rec.get('fields', {})
-        if str(f.get('Fecha','')).startswith(str(year)):
-            p_val = f.get('Sucursal')
-            p_str = p_val[0] if isinstance(p_val, list) else str(p_val)
-            if normalizar_texto_simple(p_str) == plaza_norm: filtered.append(rec)
+        # Eliminado el if f.get('Fecha').startswith(year)
+        # Ahora confiamos en que la tabla seleccionada tiene los datos correctos
+        p_val = f.get('Sucursal')
+        p_str = p_val[0] if isinstance(p_val, list) else str(p_val)
+        if normalizar_texto_simple(p_str) == plaza_norm: filtered.append(rec)
     filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     return filtered
 
@@ -347,7 +341,6 @@ def upload_evidence_to_airtable(base_id, table_id, record_id, updates):
     return r.status_code == 200 if r else False
 
 def delete_field_from_airtable(base_id, table_id, record_id, field):
-    # Función actualizada para registrar exáctamente qué campo se eliminó
     r = airtable_request("PATCH", f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}", {"fields": {field: None}})
     if r.status_code == 200: 
         registrar_historial("Eliminación Evidencia", f"Se eliminó el archivo del campo: {field}")
@@ -363,7 +356,6 @@ if 'allowed_plazas' not in st.session_state: st.session_state.allowed_plazas=[]
 if 'sucursal_actual' not in st.session_state: st.session_state.sucursal_actual=""
 if 'selected_event' not in st.session_state: st.session_state.selected_event=None
 if 'rescheduling_event' not in st.session_state: st.session_state.rescheduling_event=None
-# Inicializar historial en sesión para manejo de vista
 if 'history_data_view' not in st.session_state: st.session_state.history_data_view = []
 
 # ==============================================================================
@@ -418,7 +410,8 @@ else:
         if (bid!=st.session_state.get('current_base_id') or tid!=st.session_state.get('current_table_id') or spl!=st.session_state.get('current_plaza_view') or 'search_results' not in st.session_state):
             with st.spinner("🔄 Cargando..."):
                 st.session_state.selected_event=None; st.session_state.rescheduling_event=None
-                st.session_state.search_results=get_records(bid, tid, YEAR_ACTUAL, spl)
+                # --- MODIFICADO: LLAMADA SIN AÑO ---
+                st.session_state.search_results=get_records(bid, tid, spl)
                 st.session_state.current_base_id=bid; st.session_state.current_table_id=tid; st.session_state.current_plaza_view=spl
 
     st.divider()
@@ -446,7 +439,6 @@ else:
                 # --- FIX: Validar que los defaults existan en las opciones ---
                 defaults_validos = [x for x in d['plazas'] if x in SUCURSALES_OFICIALES]
                 npl=st.multiselect("Plazas", SUCURSALES_OFICIALES, defaults_validos)
-                # -------------------------------------------------------------
                 
                 if st.form_submit_button("Guardar", type="primary"):
                     crear_actualizar_usuario_airtable(nu,np,nr,npl,rid); st.success("OK"); st.rerun()
@@ -492,17 +484,15 @@ else:
             c_refresh, c_delete = st.columns([1, 4])
             if c_refresh.button("🔄 Actualizar", type="primary"):
                 with st.spinner("Actualizando historial..."):
-                    st.session_state.history_data_view = get_full_history() # Carga manual
+                    st.session_state.history_data_view = get_full_history() 
             
             if c_delete.button("🗑️ Eliminar Historial Completo (Limpiar Vista)", type="secondary"):
-                st.session_state.history_data_view = [] # Limpieza visual
+                st.session_state.history_data_view = [] 
                 st.success("Vista limpiada.")
                 st.rerun()
 
-            # Lógica de Visualización
             logs = st.session_state.history_data_view
             
-            # Si está vacío (o es primera carga), intentamos cargar automáticamente (opcional, pero mejor UX)
             if not logs and 'history_loaded' not in st.session_state:
                 logs = get_full_history()
                 st.session_state.history_data_view = logs
@@ -510,8 +500,6 @@ else:
 
             if logs:
                 df = pd.DataFrame(logs)
-                
-                # Filtros
                 col_u, col_s = st.columns(2)
                 if 'Usuario' in df.columns:
                     sel_users = col_u.multiselect("Filtrar por Usuario", df['Usuario'].unique())
@@ -520,28 +508,21 @@ else:
                     sel_sucs = col_s.multiselect("Filtrar por Sucursal", df['Sucursal'].unique())
                     if sel_sucs: df = df[df['Sucursal'].isin(sel_sucs)]
 
-                # Agrupación por Mes
                 if 'Fecha' in df.columns:
                     df['Fecha_DT'] = pd.to_datetime(df['Fecha'], errors='coerce')
-                    # Mapeo de meses en español
                     meses_es = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
-                    
-                    # Creamos columna de agrupación (Año-Mes numérico para ordenar, Nombre para mostrar)
                     df['YearMonth'] = df['Fecha_DT'].dt.strftime('%Y-%m')
                     
-                    # Ordenar grupos del más reciente al más antiguo
                     for ym in sorted(df['YearMonth'].unique(), reverse=True):
                         df_month = df[df['YearMonth'] == ym]
                         if not df_month.empty:
                             dt_obj = df_month.iloc[0]['Fecha_DT']
                             nombre_mes = f"{meses_es[dt_obj.month]} {dt_obj.year}"
-                            
-                            with st.expander(f"📅 {nombre_mes} ({len(df_month)} registros)", expanded=(ym == sorted(df['YearMonth'].unique(), reverse=True)[0])): # Solo expandir el primero
-                                # Mostrar tabla limpia
+                            with st.expander(f"📅 {nombre_mes} ({len(df_month)} registros)", expanded=(ym == sorted(df['YearMonth'].unique(), reverse=True)[0])): 
                                 display_cols = ["Fecha", "Usuario", "Accion", "Sucursal", "Detalles"]
                                 st.dataframe(df_month[[c for c in display_cols if c in df_month.columns]], use_container_width=True, hide_index=True)
                 else:
-                    st.dataframe(df, use_container_width=True) # Fallback si no hay fecha
+                    st.dataframe(df, use_container_width=True)
             else:
                 st.info("No hay datos para mostrar en esta vista.")
 
@@ -596,13 +577,15 @@ else:
                 
                 if st.form_submit_button("Guardar", type="primary"):
                     new_reg = {"Fecha":nf.strftime("%Y-%m-%d"),"Hora":nh,"Tipo":nt,"Sucursal":f.get('Sucursal'),"Seccion":ns,"Ruta a seguir":nr,"Punto de reunion":np,"Municipio":f"{nm} (Evento Reagendado)","Cantidad":nc,"AM Responsable":nam,"Teléfono AM":ntam,"DM Responsable":ndm,"Teléfono DM":ntdm}
-                    if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Hecho"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view); st.rerun()
+                    # --- MODIFICADO: LLAMADA SIN AÑO ---
+                    if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Hecho"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, st.session_state.current_plaza_view); st.rerun()
                     else: st.error("Error")
 
         # 3. CARGA EVIDENCIA
         else:
             evt = st.session_state.selected_event; f=evt['fields']
-            current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
+            # --- MODIFICADO: LLAMADA SIN AÑO ---
+            current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
             if current_record_fresh: f = current_record_fresh['fields']; evt = current_record_fresh
             
             if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
@@ -636,7 +619,6 @@ else:
                         st.image(f[k][0]['url'], use_container_width=True)
                         if not bloqueado:
                             if st.button("🗑️ Eliminar", key=f"d_{k}", type="secondary", use_container_width=True):
-                                # AQUÍ ESTÁ EL CAMBIO SOLICITADO PARA EL HISTORIAL DETALLADO AL BORRAR:
                                 delete_field_from_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], k)
                                 st.rerun()
                     else:
@@ -660,12 +642,11 @@ else:
             st.markdown(f"#### {t3}"); cr3=st.columns(2); render_cell(cr3[0], "Reporte firmado", "Reporte")
             if f.get('Tipo') == "Actividad en Sucursal": render_cell(cr3[1], "Lista de asistencia", "Lista")
             
-            # BOTÓN FINALIZAR -> REGRESAR A LISTA
             if not bloqueado and esta_completo:
                 st.divider(); st.info("⚠️ Tienes permiso temporal.")
                 if st.button("💾 FINALIZAR Y GUARDAR CAMBIOS", type="primary", use_container_width=True):
                     with st.spinner("Finalizando y bloqueando..."):
                         airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {"Estado_Bloqueo": None}})
                         registrar_historial("Fin Edición Permiso", f"Usuario finalizó edición ID {evt['id']}")
-                        st.session_state.selected_event = None # <--- REGRESO AUTOMÁTICO
+                        st.session_state.selected_event = None
                         st.success("Guardado."); st.rerun()
