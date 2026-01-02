@@ -161,7 +161,12 @@ def airtable_request(method, url, data=None, params=None):
         elif method == "PATCH": r = requests.patch(url, json=data, headers=headers)
         elif method == "DELETE": r = requests.delete(url, headers=headers)
         return r
-    except: return None
+    except Exception as e:
+        # Aquí creamos una respuesta falsa para transportar el error a la pantalla
+        class MockResponse:
+            status_code = 500
+            text = f"Error Interno de Python: {str(e)}"
+        return MockResponse()
 
 def api_get_all_bases():
     r = airtable_request("GET", "https://api.airtable.com/v0/meta/bases")
