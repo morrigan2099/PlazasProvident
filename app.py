@@ -31,7 +31,7 @@ cloudinary.config(
     api_secret=CLOUDINARY_CONFIG["api_secret"]
 )
 
-# --- SUCURSALES (Definición Oficial) ---
+# --- SUCURSALES ---
 SUCURSALES_OFICIALES = [
     "Cordoba", "Orizaba", "Xalapa", "Puebla", 
     "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"
@@ -46,17 +46,11 @@ YEAR_ACTUAL = 2025
 # ==============================================================================
 
 def limpiar_clave(texto):
-    """
-    Convierte texto a una 'clave' simple para comparar.
-    Ej: 'Valla Móvil' -> 'vallamovil'
-    """
+    """Limpia texto para buscar coincidencia en assets (sin acentos, minúsculas, sin espacios)"""
     if not isinstance(texto, str): return str(texto).lower()
-    # 1. Quitar acentos
     texto = unicodedata.normalize('NFD', texto)
     texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
-    # 2. Minúsculas
     texto = texto.lower()
-    # 3. Quitar espacios y símbolos, dejar solo letras y números
     texto = re.sub(r'[^a-z0-9]', '', texto)
     return texto
 
@@ -70,39 +64,28 @@ def formatear_fecha_larga(fecha_str):
     except: return fecha_str
 
 def get_imagen_plantilla(tipo_evento):
-    """
-    Busca coincidencias en la carpeta assets.
-    """
-    carpeta_assets = "assets" # IMPORTANTE: Debe existir esta carpeta junto a app.py
+    """Busca imagen en assets ignorando formato exacto del nombre"""
+    carpeta_assets = "assets" 
     url_default = "https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png"
 
     if not tipo_evento: tipo_evento = "default"
-
-    # Verificar si existe la carpeta assets
-    if not os.path.exists(carpeta_assets):
-        return url_default
+    if not os.path.exists(carpeta_assets): return url_default
 
     clave_buscada = limpiar_clave(str(tipo_evento))
 
     try:
         archivos = os.listdir(carpeta_assets)
-        
-        # Búsqueda exacta (limpiando nombres)
+        # 1. Búsqueda exacta limpia
         for archivo in archivos:
             nombre_base = os.path.splitext(archivo)[0]
-            clave_archivo = limpiar_clave(nombre_base)
-            
-            # Comparamos vallamovil == vallamovil
-            if clave_buscada == clave_archivo:
+            if limpiar_clave(nombre_base) == clave_buscada:
                 return os.path.join(carpeta_assets, archivo)
         
-        # Fallback a imagen default local si existe
+        # 2. Fallback default local
         for archivo in archivos:
             if "default" in limpiar_clave(archivo):
                 return os.path.join(carpeta_assets, archivo)
-
-    except Exception:
-        pass
+    except: pass
 
     return url_default
 
@@ -252,21 +235,15 @@ else:
             st.session_state.current_plaza_view = sel_plaza
         
         st.divider()
-
-        # --- DIAGNÓSTICO DE IMÁGENES (SOLO PARA ADMIN) ---
+        # DIAGNÓSTICO
         if st.session_state.user_role == "admin":
-            with st.expander("🔧 Diagnóstico de Imágenes"):
-                st.write(f"Directorio Actual: `{os.getcwd()}`")
+            with st.expander("🔧 Diagnóstico de Assets"):
                 path_assets = os.path.join(os.getcwd(), "assets")
                 if os.path.exists(path_assets):
-                    st.success("✅ Carpeta 'assets' encontrada.")
-                    archivos = os.listdir(path_assets)
-                    st.write("Archivos detectados:")
-                    for a in archivos:
-                        st.code(f"{a} -> Clave: {limpiar_clave(os.path.splitext(a)[0])}")
-                else:
-                    st.error("❌ NO se encuentra la carpeta 'assets'.")
-                    st.info("Crea una carpeta llamada 'assets' junto a este script y mete las fotos ahí.")
+                    st.success("✅ Carpeta assets encontrada.")
+                    for a in os.listdir(path_assets):
+                        st.text(f"📄 {a} -> {limpiar_clave(os.path.splitext(a)[0])}")
+                else: st.error("❌ Carpeta assets no encontrada.")
 
         st.divider()
         if st.button("Cerrar Sesión"):
@@ -312,12 +289,20 @@ else:
                             with col_img:
                                 img_path = get_imagen_plantilla(f.get('Tipo'))
                                 st.image(img_path, use_container_width=True)
-                                # Debug visual para ver qué intenta cargar
-                                # st.caption(f"Ruta: {img_path}") 
+                            
+                            # --- AQUI ESTÁ EL CAMBIO DE FORMATO ---
                             with col_data:
                                 fecha_larga = formatear_fecha_larga(f.get('Fecha'))
                                 st.markdown(f"### 🗓️ {fecha_larga}")
-                                st.markdown(f"**Tipo:** {f.get('Tipo', '--')} \n **📍 Punto:** {f.get('Punto de reunion', 'N/A')} \n **🏙️ Municipio:** {f.get('Municipio', 'N/A')} \n **⏰ Hora:** {f.get('Hora', '--')}")
+                                
+                                st.markdown(f"**📌 Tipo:** {f.get('Tipo', '--')}")
+                                st.markdown(f"**📍 Punto:** {f.get('Punto de reunion', 'N/A')}")
+                                st.markdown(f"**🛣️ Ruta:** {f.get('Ruta a seguir', 'N/A')}")
+                                st.markdown(f"**🏙️ Municipio:** {f.get('Municipio', 'N/A')}")
+                                st.markdown(f"**⏰ Hora:** {f.get('Hora', '--')}")
+                                
+                                st.markdown("<br>", unsafe_allow_html=True) # Espacio extra antes de botones
+                                
                                 c_btn_1, c_btn_2 = st.columns(2)
                                 with c_btn_1:
                                     if st.button("📸 SUBIR EVIDENCIA", key=f"btn_{r['id']}", type="primary", use_container_width=True):
