@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 import os
 import json
+import time
 import unicodedata
 import re
 from PIL import Image
@@ -36,6 +37,7 @@ st.markdown("""
     
     .stButton button[kind="primary"] { background-color: #00c853 !important; border: none !important; color: #ffffff !important; font-weight: 700 !important; }
     .stButton button[kind="primary"]:hover { background-color: #009624 !important; }
+    .stButton button[kind="primary"] p { color: #ffffff !important; }
     .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
     
     [data-testid="stFileUploader"] section { min-height: 0px !important; padding: 10px !important; border: 2px dashed #00b0ff !important; }
@@ -53,12 +55,12 @@ CLOUDINARY_CONFIG = {
 }
 AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87ad1f2d71bfe853ce9783"
 
-# --- ⚠️ CONFIGURACIÓN BASE MAESTRA ---
+# --- CONFIGURACIÓN BASE MAESTRA ---
 ADMIN_BASE_ID = "appRF7jHcmBJZA1px"
 USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"
 CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"
 BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd" 
-HISTORY_TABLE_ID = "tblmy6hL3VXQM5883"  # <--- 🚨 PEGA AQUÍ EL ID DE LA TABLA HISTORIAL (tbl...)
+HISTORY_TABLE_ID = "tblmy6hL3VXQM5883"  # <--- ✅ ID CORREGIDO
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
@@ -137,7 +139,7 @@ def check_evidencia_completa(fields):
     return False
 
 # ==============================================================================
-# 3. FUNCIONES AIRTABLE (CORE + DEBUG)
+# 3. FUNCIONES AIRTABLE
 # ==============================================================================
 def airtable_request(method, url, data=None, params=None):
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
@@ -154,16 +156,13 @@ def airtable_request(method, url, data=None, params=None):
         st.error(f"❌ Error de Conexión Python: {str(e)}")
         return None
 
-# --- AUDITORÍA / LOGS ---
+# --- AUDITORÍA / LOGS (CORREGIDO) ---
 def registrar_historial(accion, detalles):
-    # Si el usuario no ha puesto el ID correcto, saltamos el log para no dar error
-    if "tbl" not in HISTORY_TABLE_ID: return 
-    
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}"
     usuario = st.session_state.get('user_name', 'Sistema')
     rol = st.session_state.get('user_role', '--')
     sucursal = st.session_state.get('sucursal_actual', 'N/A')
-    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # Formato texto para asegurar compatibilidad
+    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S") 
     
     data = {
         "fields": {
@@ -175,10 +174,12 @@ def registrar_historial(accion, detalles):
             "Detalles": detalles
         }
     }
-    requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
+    # DEBUG: Si falla, avisar
+    res = requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
+    if res.status_code != 200:
+        st.toast(f"Error guardando historial: {res.text}", icon="⚠️")
 
 def get_full_history():
-    if "tbl" not in HISTORY_TABLE_ID: return []
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}?sort%5B0%5D%5Bfield%5D=Fecha&sort%5B0%5D%5Bdirection%5D=desc")
     if r and r.status_code == 200:
         return [rec['fields'] for rec in r.json().get('records', [])]
@@ -194,6 +195,7 @@ def api_get_all_tables(base_id):
     return {t['name']: t['id'] for t in r.json().get('tables', [])} if r and r.status_code==200 else {}
 
 def get_records(base_id, table_id, year, plaza):
+    # Recargar datos frescos
     r = airtable_request("GET", f"https://api.airtable.com/v0/{base_id}/{table_id}")
     if not r or r.status_code != 200: return []
     filtered = []; plaza_norm = normalizar_texto_simple(plaza)
@@ -443,7 +445,6 @@ else:
                 with st.spinner("Descargando logs..."):
                     logs = get_full_history()
                     if logs:
-                        # CREAR DATAFRAME ROBUSTO (Evita error si faltan columnas)
                         df_logs = pd.DataFrame(logs)
                         required_cols = ["Fecha", "Usuario", "Accion", "Sucursal", "Rol", "Detalles"]
                         for c in required_cols:
@@ -504,6 +505,14 @@ else:
         # 3. CARGA EVIDENCIA
         else:
             evt = st.session_state.selected_event; f=evt['fields']
+            
+            # Recargar estado fresco del registro desde Airtable para ver si ya desbloquearon
+            # (Solo si está seleccionado y no estamos en edición activa aún)
+            current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
+            if current_record_fresh:
+                f = current_record_fresh['fields']
+                evt = current_record_fresh # Actualizar objeto en memoria
+            
             if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
             st.divider(); st.markdown(f"### 📸 {f.get('Tipo')} - {obtener_ubicacion_corta(f)}"); st.divider()
             
@@ -513,13 +522,22 @@ else:
 
             if bloqueado:
                 st.warning("🔒 Registro Bloqueado. Se requiere permiso para modificar.")
-                if estado == 'Solicitado': st.info("⏳ Solicitud enviada. Esperando al admin.")
+                if estado == 'Solicitado': 
+                    st.info("⏳ Solicitud enviada. Esperando autorización... (La pantalla se actualizará automáticamente)")
+                    # AUTO-POLLING PARA EL USUARIO
+                    time.sleep(4)
+                    st.rerun()
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
                         with st.spinner("Enviando..."):
                             resp = solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'])
-                            if resp and resp.status_code==200: st.success("Enviado."); evt['fields']['Estado_Bloqueo']='Solicitado'; st.rerun()
+                            if resp and resp.status_code==200: st.success("Enviado."); st.rerun()
                             else: pass 
+            else:
+                # Si acabamos de entrar y estaba desbloqueado (o se desbloqueó solo), SONIDO
+                if ya_tiene and estado == 'Desbloqueado':
+                     st.toast("🔓 ¡PERMISO CONCEDIDO!", icon="✅")
+                     st.markdown("""<audio autoplay><source src="https://upload.wikimedia.org/wikipedia/commons/0/05/Beep-09.ogg" type="audio/ogg"></audio>""", unsafe_allow_html=True)
 
             def render_cell(col, k, label):
                 with col:
@@ -529,7 +547,7 @@ else:
                         if not bloqueado:
                             if st.button("🗑️ Eliminar", key=f"d_{k}", type="secondary", use_container_width=True):
                                 airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {k: None}})
-                                del st.session_state.selected_event['fields'][k]; st.rerun()
+                                st.rerun()
                     else:
                         if not bloqueado:
                             up = st.file_uploader(k, key=f"u_{k}", type=['jpg','png','jpeg'], label_visibility="collapsed")
@@ -538,7 +556,7 @@ else:
                                 with st.spinner("Subiendo..."):
                                     res = cloudinary.uploader.upload(img_ok, format="webp", resource_type="image")
                                     upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], {k:[{"url":res['secure_url']}]})
-                                    st.session_state.selected_event['fields'][k] = [{"url":res['secure_url']}]; st.rerun()
+                                    st.rerun()
                         else: st.caption("🔒")
 
             st.markdown("#### 1. Foto Inicio"); c1,c2 = st.columns(2); render_cell(c1, "Foto de equipo", "Foto Equipo")
@@ -551,14 +569,15 @@ else:
             st.markdown(f"#### {t3}"); cr3=st.columns(2); render_cell(cr3[0], "Reporte firmado", "Reporte")
             if f.get('Tipo') == "Actividad en Sucursal": render_cell(cr3[1], "Lista de asistencia", "Lista")
             
-            # BOTÓN FINALIZAR (RE-BLOQUEO)
+            # BOTÓN FINALIZAR (RE-BLOQUEO + SALIDA AUTOMÁTICA)
             if not bloqueado:
                 st.divider(); st.info("⚠️ Tienes permiso temporal.")
                 if st.button("💾 FINALIZAR Y GUARDAR CAMBIOS", type="primary", use_container_width=True):
                     with st.spinner("Finalizando y bloqueando..."):
                         airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {"Estado_Bloqueo": None}})
                         registrar_historial("Fin Edición Permiso", f"Usuario finalizó edición ID {evt['id']}")
-                        st.success("Guardado y bloqueado."); st.rerun()
+                        st.session_state.selected_event = None # <--- ESTA LINEA REGRESA AL MENU PRINCIPAL
+                        st.success("Guardado."); st.rerun()
 
             st.divider(); 
             if st.button("⬅️ REGRESAR (FINAL)", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
