@@ -60,7 +60,7 @@ CLOUDINARY_CONFIG = {
 }
 AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87ad1f2d71bfe853ce9783"
 
-# --- 🔔 TELEGRAM CONFIG (TUS DATOS) ---
+# --- 🔔 TELEGRAM CONFIG ---
 TELEGRAM_TOKEN = "8282197056:AAGMNd3kSJThY2_RN-Umk9fAlJ3a2NECpcE"
 TELEGRAM_CHAT_ID = "1858285363"
 
@@ -167,12 +167,11 @@ def airtable_request(method, url, data=None, params=None):
 
 # --- TELEGRAM ALERT ---
 def enviar_alerta_telegram(mensaje):
-    """Envía notificación Push al Telegram del Admin"""
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
         requests.post(url, json=payload)
-    except: pass # Si falla telegram, no romper la app
+    except: pass
 
 # --- AUDITORÍA / LOGS ---
 def registrar_historial(accion, detalles):
@@ -247,7 +246,6 @@ def solicitar_desbloqueo(base_id, table_id, record_id, campos):
     resp = airtable_request("PATCH", url, {"fields": {"Estado_Bloqueo": "Solicitado"}})
     if resp and resp.status_code == 200: 
         registrar_historial("Solicitud Permiso", f"Record ID: {record_id}")
-        # ENVIO DE TELEGRAM
         msg = f"🔔 *SOLICITUD DE DESBLOQUEO*\n\n👤 *Usuario:* {st.session_state.user_name}\n📍 *Sucursal:* {campos.get('Sucursal')}\n📅 *Fecha:* {campos.get('Fecha')}\n📌 *Evento:* {campos.get('Tipo')}"
         enviar_alerta_telegram(msg)
     return resp
@@ -433,12 +431,9 @@ else:
         with ta:
             st.subheader("🔐 Todas las Solicitudes Pendientes (Global)")
             
-            # --- MONITOR EN VIVO ---
             monitor_activo = st.checkbox("🔄 Activar Monitor en Vivo (Sonido activado)", value=False)
             if monitor_activo:
                 time.sleep(5); st.rerun()
-                
-            if st.button("🔄 Actualizar Lista Manual"): st.rerun()
             
             if not all_pending: st.info("✅ No hay solicitudes pendientes.")
             else:
@@ -456,16 +451,15 @@ else:
         
         with th:
             st.subheader("📜 Auditoría del Sistema")
-            if st.button("📥 Cargar Historial Completo"):
-                with st.spinner("Descargando logs..."):
-                    logs = get_full_history()
-                    if logs:
-                        df_logs = pd.DataFrame(logs)
-                        required_cols = ["Fecha", "Usuario", "Accion", "Sucursal", "Rol", "Detalles"]
-                        for c in required_cols:
-                            if c not in df_logs.columns: df_logs[c] = ""
-                        st.dataframe(df_logs[required_cols], use_container_width=True)
-                    else: st.info("No hay logs registrados.")
+            with st.spinner("Cargando logs..."):
+                logs = get_full_history()
+                if logs:
+                    df_logs = pd.DataFrame(logs)
+                    required_cols = ["Fecha", "Usuario", "Accion", "Sucursal", "Rol", "Detalles"]
+                    for c in required_cols:
+                        if c not in df_logs.columns: df_logs[c] = ""
+                    st.dataframe(df_logs[required_cols], use_container_width=True)
+                else: st.info("No hay logs registrados.")
 
         main_area = tm
     else: main_area = st.container()
@@ -482,7 +476,6 @@ else:
                     for r in recs:
                         f = r['fields']; esta_completo = check_evidencia_completa(f)
                         estado_bloqueo = f.get('Estado_Bloqueo')
-                        
                         bloqueado = False
                         icon_lock = ""
                         if esta_completo:
@@ -516,7 +509,6 @@ else:
                 nt=c1.text_input("Tipo", f.get('Tipo')); ns=c2.text_input("Sección", f.get('Seccion')); np=c3.text_input("Punto", f.get('Punto de reunion'))
                 nr=c1.text_input("Ruta", f.get('Ruta a seguir')); nam=c2.text_input("AM", f.get('AM Responsable')); ndm=c3.text_input("DM", f.get('DM Responsable'))
                 ntam=c1.text_input("Tel AM", f.get('Teléfono AM')); ntdm=c2.text_input("Tel DM", f.get('Teléfono DM')); nc=c3.text_input("Cantidad", f.get('Cantidad'))
-                
                 if st.form_submit_button("Guardar", type="primary"):
                     new_reg = {"Fecha":nf.strftime("%Y-%m-%d"),"Hora":nh,"Tipo":nt,"Sucursal":f.get('Sucursal'),"Seccion":ns,"Ruta a seguir":nr,"Punto de reunion":np,"Municipio":f"{nm} (Evento Reagendado)","Cantidad":nc,"AM Responsable":nam,"Teléfono AM":ntam,"DM Responsable":ndm,"Teléfono DM":ntdm}
                     if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Hecho"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view); st.rerun()
@@ -525,8 +517,6 @@ else:
         # 3. CARGA EVIDENCIA
         else:
             evt = st.session_state.selected_event; f=evt['fields']
-            
-            # --- AUTO-CONSULTA PARA DETECTAR DESBLOQUEO ---
             current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
             if current_record_fresh: f = current_record_fresh['fields']; evt = current_record_fresh
             
@@ -542,7 +532,7 @@ else:
                 st.warning("🔒 Registro Completo y Bloqueado.")
                 if estado == 'Solicitado': 
                     st.info("⏳ Solicitud enviada. Esperando autorización... (La pantalla se actualizará automáticamente)")
-                    time.sleep(4); st.rerun() # POLLING USUARIO
+                    time.sleep(4); st.rerun() # POLLING
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
                         with st.spinner("Enviando..."):
@@ -584,14 +574,13 @@ else:
             st.markdown(f"#### {t3}"); cr3=st.columns(2); render_cell(cr3[0], "Reporte firmado", "Reporte")
             if f.get('Tipo') == "Actividad en Sucursal": render_cell(cr3[1], "Lista de asistencia", "Lista")
             
-            # BOTÓN FINALIZAR -> REGRESAR A LISTA
             if not bloqueado and esta_completo:
                 st.divider(); st.info("⚠️ Tienes permiso temporal.")
                 if st.button("💾 FINALIZAR Y GUARDAR CAMBIOS", type="primary", use_container_width=True):
                     with st.spinner("Finalizando y bloqueando..."):
                         airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {"Estado_Bloqueo": None}})
                         registrar_historial("Fin Edición Permiso", f"Usuario finalizó edición ID {evt['id']}")
-                        st.session_state.selected_event = None # <--- REGRESO AUTOMÁTICO
+                        st.session_state.selected_event = None
                         st.success("Guardado."); st.rerun()
 
             st.divider(); 
