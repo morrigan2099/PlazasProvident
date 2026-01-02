@@ -9,6 +9,7 @@ import json
 import time
 import unicodedata
 import re
+import pytz # <--- LIBRERÍA PARA ZONA HORARIA
 from PIL import Image
 import io
 import base64
@@ -173,14 +174,21 @@ def enviar_alerta_telegram(mensaje):
         requests.post(url, json=payload)
     except: pass
 
-# --- AUDITORÍA / LOGS ---
+# --- AUDITORÍA / LOGS (CON ZONA HORARIA MX) ---
 def registrar_historial(accion, detalles):
     if "tbl" not in HISTORY_TABLE_ID: return 
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}"
     usuario = st.session_state.get('user_name', 'Sistema')
     rol = st.session_state.get('user_role', '--')
     sucursal = st.session_state.get('sucursal_actual', 'N/A')
-    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S") 
+    
+    # Obtener hora actual en zona horaria México
+    try:
+        mx_zone = pytz.timezone('America/Mexico_City')
+        fecha = datetime.now(mx_zone).strftime("%Y-%m-%d %H:%M:%S")
+    except:
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # Fallback si falla pytz
+    
     data = {"fields": {"Fecha": fecha, "Usuario": usuario, "Rol": rol, "Sucursal": sucursal, "Accion": accion, "Detalles": detalles}}
     res = requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
     if res.status_code != 200: st.toast(f"Error historial: {res.text}", icon="⚠️")
@@ -225,7 +233,7 @@ def get_all_pending_requests():
                     pending_list.append(rec)
     return pending_list
 
-# --- LÓGICA DE RESPALDO ---
+# --- LÓGICA DE RESPALDO BLINDADA ---
 def crear_respaldo_evento(fields_original):
     campos_copiar = ["Tipo", "Fecha", "Hora", "Sucursal", "Seccion", "Ruta a seguir", "Punto de reunion", "Municipio", "Cantidad", "AM Responsable", "DM Responsable", "Teléfono AM", "Teléfono DM", "Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]
     new_data = {}
@@ -245,7 +253,7 @@ def solicitar_desbloqueo(base_id, table_id, record_id, campos):
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}"
     resp = airtable_request("PATCH", url, {"fields": {"Estado_Bloqueo": "Solicitado"}})
     if resp and resp.status_code == 200: 
-        registrar_historial("Solicitud Permiso", f"Record ID: {record_id}")
+        registrar_historial("Solicitud Permiso", f"Record ID: {record_id} ({campos.get('Tipo')})")
         msg = f"🔔 *SOLICITUD DE DESBLOQUEO*\n\n👤 *Usuario:* {st.session_state.user_name}\n📍 *Sucursal:* {campos.get('Sucursal')}\n📅 *Fecha:* {campos.get('Fecha')}\n📌 *Evento:* {campos.get('Tipo')}"
         enviar_alerta_telegram(msg)
     return resp
@@ -315,12 +323,12 @@ def create_new_event(base_id, table_id, data):
 
 def upload_evidence_to_airtable(base_id, table_id, record_id, updates):
     r = airtable_request("PATCH", f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}", {"fields": updates})
-    if r.status_code == 200: registrar_historial("Subir Evidencia", f"Campos: {list(updates.keys())} en ID {record_id}")
+    if r.status_code == 200: registrar_historial("Subir/Editar Evidencia", f"Campos: {list(updates.keys())} en ID {record_id}")
     return r.status_code == 200 if r else False
 
 def delete_field_from_airtable(base_id, table_id, record_id, field):
     r = airtable_request("PATCH", f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}", {"fields": {field: None}})
-    if r.status_code == 200: registrar_historial("Borrar Evidencia", f"Campo: {field} en ID {record_id}")
+    if r.status_code == 200: registrar_historial("Eliminar Evidencia", f"Campo: {field} en ID {record_id}")
     return r.status_code == 200 if r else False
 
 # ==============================================================================
@@ -509,6 +517,7 @@ else:
                 nt=c1.text_input("Tipo", f.get('Tipo')); ns=c2.text_input("Sección", f.get('Seccion')); np=c3.text_input("Punto", f.get('Punto de reunion'))
                 nr=c1.text_input("Ruta", f.get('Ruta a seguir')); nam=c2.text_input("AM", f.get('AM Responsable')); ndm=c3.text_input("DM", f.get('DM Responsable'))
                 ntam=c1.text_input("Tel AM", f.get('Teléfono AM')); ntdm=c2.text_input("Tel DM", f.get('Teléfono DM')); nc=c3.text_input("Cantidad", f.get('Cantidad'))
+                
                 if st.form_submit_button("Guardar", type="primary"):
                     new_reg = {"Fecha":nf.strftime("%Y-%m-%d"),"Hora":nh,"Tipo":nt,"Sucursal":f.get('Sucursal'),"Seccion":ns,"Ruta a seguir":nr,"Punto de reunion":np,"Municipio":f"{nm} (Evento Reagendado)","Cantidad":nc,"AM Responsable":nam,"Teléfono AM":ntam,"DM Responsable":ndm,"Teléfono DM":ntdm}
                     if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Hecho"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view); st.rerun()
@@ -532,7 +541,7 @@ else:
                 st.warning("🔒 Registro Completo y Bloqueado.")
                 if estado == 'Solicitado': 
                     st.info("⏳ Solicitud enviada. Esperando autorización... (La pantalla se actualizará automáticamente)")
-                    time.sleep(4); st.rerun() # POLLING
+                    time.sleep(4); st.rerun()
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
                         with st.spinner("Enviando..."):
