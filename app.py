@@ -8,6 +8,8 @@ import os
 import json
 import unicodedata
 import re
+from PIL import Image
+import io
 
 # ==============================================================================
 # 1. CONFIGURACIÓN Y ESTILOS
@@ -26,7 +28,7 @@ st.markdown("""
     
     [data-testid="stFileUploader"] section {
         min-height: 0px !important;
-        padding: 15px !important;
+        padding: 10px !important; /* Padding reducido */
         background-color: #f8f9fa;
         border: 2px dashed #a0aec0;
         border-radius: 12px;
@@ -38,7 +40,7 @@ st.markdown("""
     
     [data-testid="stFileUploader"] section::after {
         content: "➕";
-        font-size: 28px;
+        font-size: 32px; /* Más grande */
         color: #4a5568;
         visibility: visible;
         display: block;
@@ -53,6 +55,14 @@ st.markdown("""
     .stButton button[kind="secondary"]:hover {
         background-color: #fff5f5;
         border-color: #c53030;
+    }
+
+    /* TÍTULOS DE FOTOS MÁS GRANDES */
+    .caption-text {
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -79,7 +89,7 @@ cloudinary.config(
 )
 
 # ==============================================================================
-# 2. FUNCIONES DE UTILIDAD
+# 2. FUNCIONES DE UTILIDAD Y COMPRESIÓN
 # ==============================================================================
 def limpiar_clave(texto):
     if not isinstance(texto, str): return str(texto).lower()
@@ -95,6 +105,51 @@ def formatear_fecha_larga(fecha_str):
         dt = datetime.strptime(fecha_str, "%Y-%m-%d")
         return f"{dias[dt.weekday()]} {dt.day:02d} de {meses[dt.month]} de {dt.year}"
     except: return fecha_str
+
+def obtener_ubicacion_corta(fields):
+    """Retorna la cadena más corta entre Punto, Ruta o Municipio"""
+    opciones = [
+        str(fields.get('Punto de reunion', '')),
+        str(fields.get('Ruta a seguir', '')),
+        str(fields.get('Municipio', ''))
+    ]
+    # Filtramos vacíos o 'None'
+    validas = [op for op in opciones if op and op.lower() != 'none' and len(op) > 2]
+    
+    if not validas: return "Ubicación N/A"
+    # Retorna la más corta
+    return min(validas, key=len)
+
+def comprimir_imagen_webp(archivo_upload):
+    """
+    Recibe un UploadedFile de Streamlit.
+    Retorna un BytesIO con la imagen comprimida en WebP.
+    """
+    try:
+        # Abrir imagen con PIL
+        image = Image.open(archivo_upload)
+        
+        # Convertir a RGB si es PNG con transparencia para evitar errores en JPG/WebP
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+            
+        # Redimensionar si es muy grande (Max width 1920px)
+        max_width = 1920
+        if image.width > max_width:
+            ratio = max_width / image.width
+            new_height = int(image.height * ratio)
+            image = image.resize((max_width, new_height), Image.Resampling.LANCZOS)
+            
+        # Guardar en buffer como WebP
+        buffer_salida = io.BytesIO()
+        # quality=80 es excelente balance peso/calidad
+        image.save(buffer_salida, format="WEBP", quality=80, optimize=True)
+        buffer_salida.seek(0)
+        
+        return buffer_salida
+    except Exception as e:
+        st.error(f"Error comprimiendo: {e}")
+        return archivo_upload # Si falla, devolver original
 
 def get_imagen_plantilla(tipo_evento):
     carpeta_assets = "assets" 
@@ -148,7 +203,7 @@ def check_evidencia_completa(fields):
     return False
 
 # ==============================================================================
-# 3. FUNCIONES AIRTABLE
+# 3. FUNCIONES AIRTABLE Y LOGICA DE BORRADO
 # ==============================================================================
 def api_get_all_bases():
     url = "https://api.airtable.com/v0/meta/bases"
@@ -276,11 +331,9 @@ else:
             st.rerun()
     st.divider()
 
-    # --- TOPBAR AUTO-CARGA ---
+    # TOPBAR
     with st.container():
-        # Usamos 3 columnas (Eliminamos la del botón)
         col_base, col_mes, col_plaza = st.columns(3)
-        
         with col_base:
             bases_map = get_authorized_bases()
             if not bases_map: st.warning("⚠️ Sin bases"); base_id = None
@@ -296,46 +349,27 @@ else:
             sel_plaza = st.selectbox("📍 Plaza", plazas_permitidas) if plazas_permitidas else None
             if sel_plaza: st.session_state.sucursal_actual = sel_plaza
 
-    # --- LÓGICA DE AUTO-CARGA (SE EJECUTA EN CADA RERUN) ---
+    # AUTO-CARGA
     if base_id and table_id and sel_plaza:
-        # Verificamos si cambió algo respecto a lo que tenemos en memoria
-        has_changed = (
-            base_id != st.session_state.get('current_base_id') or
-            table_id != st.session_state.get('current_table_id') or
-            sel_plaza != st.session_state.get('current_plaza_view') or
-            'search_results' not in st.session_state
-        )
-        
+        has_changed = (base_id != st.session_state.get('current_base_id') or table_id != st.session_state.get('current_table_id') or sel_plaza != st.session_state.get('current_plaza_view') or 'search_results' not in st.session_state)
         if has_changed:
-            with st.spinner("🔄 Actualizando eventos..."):
-                # Limpiamos selecciones previas para evitar inconsistencias
-                st.session_state.selected_event = None
-                st.session_state.rescheduling_event = None
-                
-                # Fetch de datos
-                results = get_records(base_id, table_id, YEAR_ACTUAL, sel_plaza)
-                
-                # Guardamos en estado
-                st.session_state.search_results = results
-                st.session_state.current_base_id = base_id
-                st.session_state.current_table_id = table_id
-                st.session_state.current_plaza_view = sel_plaza
-                
-                # No hacemos st.rerun() aquí para evitar bucles infinitos, 
-                # Streamlit renderizará lo siguiente con los nuevos datos.
+            with st.spinner("🔄 Actualizando..."):
+                st.session_state.selected_event = None; st.session_state.rescheduling_event = None
+                st.session_state.search_results = get_records(base_id, table_id, YEAR_ACTUAL, sel_plaza)
+                st.session_state.current_base_id = base_id; st.session_state.current_table_id = table_id; st.session_state.current_plaza_view = sel_plaza
 
     st.divider()
 
-    # PESTAÑAS ADMIN
+    # ADMIN
     if st.session_state.user_role == "admin":
         tab_main, tab_users, tab_config_db, tab_hist = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Configuración DB", "📜 Historial"])
         with tab_users:
-            users_db = cargar_usuarios(); st.subheader("Gestión de Accesos"); opciones_usuarios = ["(Crear Nuevo)"] + list(users_db.keys()); seleccion = st.selectbox("🔍 Seleccionar Usuario para Editar:", opciones_usuarios)
+            users_db = cargar_usuarios(); st.subheader("Gestión de Accesos"); opciones_usuarios = ["(Crear Nuevo)"] + list(users_db.keys()); seleccion = st.selectbox("🔍 Seleccionar Usuario:", opciones_usuarios)
             if seleccion == "(Crear Nuevo)": val_user = ""; val_pass = ""; val_role = "user"; val_plazas = []; es_edicion = False
             else: data_u = users_db[seleccion]; val_user = seleccion; val_pass = data_u.get('password', ''); val_role = data_u.get('role', 'user'); val_plazas = data_u.get('plazas', []); es_edicion = True
             with st.form("form_usuarios_admin"):
                 c1, c2 = st.columns(2); new_user = c1.text_input("Usuario (ID)", value=val_user); new_pass = c2.text_input("Contraseña", value=val_pass)
-                c3, c4 = st.columns(2); new_role = c3.selectbox("Rol", ["user", "admin"], index=0 if val_role=="user" else 1); new_plazas = c4.multiselect("Plazas Permitidas", SUCURSALES_OFICIALES, default=[p for p in val_plazas if p in SUCURSALES_OFICIALES])
+                c3, c4 = st.columns(2); new_role = c3.selectbox("Rol", ["user", "admin"], index=0 if val_role=="user" else 1); new_plazas = c4.multiselect("Plazas", SUCURSALES_OFICIALES, default=[p for p in val_plazas if p in SUCURSALES_OFICIALES])
                 if st.form_submit_button("💾 Guardar Datos", type="primary"):
                     if not new_user or not new_pass: st.error("Faltan datos.")
                     else:
@@ -343,8 +377,6 @@ else:
                         users_db[new_user] = {"password": new_pass, "role": new_role, "plazas": new_plazas}; guardar_usuarios(users_db); st.success("Guardado."); st.rerun()
             if es_edicion:
                 if st.button("🗑️ Eliminar Usuario", type="secondary"): del users_db[seleccion]; guardar_usuarios(users_db); st.warning("Eliminado."); st.rerun()
-            st.markdown("---"); st.dataframe(pd.DataFrame([{"Usuario": k, "Rol": v['role'], "Plazas": ", ".join(v['plazas'])} for k,v in users_db.items()]), use_container_width=True)
-
         with tab_config_db:
              current_config = cargar_config_db(); current_bases = current_config.get("bases", {}); current_tables = current_config.get("tables", {})
              with st.spinner("Conectando..."): real_bases = api_get_all_bases()
@@ -391,7 +423,7 @@ else:
         # 2. REAGENDAR
         elif st.session_state.rescheduling_event is not None:
             evt = st.session_state.rescheduling_event; f_orig = evt['fields']
-            if st.button("⬅️ CANCELAR"): st.session_state.rescheduling_event = None; st.rerun()
+            if st.button("⬅️ CANCELAR REAGENDADO", use_container_width=True): st.session_state.rescheduling_event = None; st.rerun()
             st.markdown("### ⚠️ Reagendar Evento")
             with st.form("reschedule_form"):
                 c1, c2, c3 = st.columns(3)
@@ -415,8 +447,9 @@ else:
             # FUNCION CORE AUTO-UPLOAD
             def render_celda_auto(columna, key, label, fields_dict):
                 with columna:
-                    st.caption(label)
-                    # CASO 1: YA EXISTE IMAGEN
+                    # Título más grande con clase personalizada
+                    st.markdown(f'<p class="caption-text">{label}</p>', unsafe_allow_html=True)
+                    
                     if fields_dict.get(key):
                         url_img = fields_dict[key][0]['url']
                         st.image(url_img, use_container_width=True)
@@ -426,43 +459,66 @@ else:
                                     del st.session_state.selected_event['fields'][key]
                                     st.rerun()
                                 else: st.error("Error al borrar")
-
-                    # CASO 2: VACÍO (AUTO-UPLOAD)
                     else:
                         file = st.file_uploader(key, key=f"up_{evt['id']}_{key}", label_visibility="collapsed", type=['jpg','png','jpeg','webp'])
                         if file is not None:
+                            # 1. Comprimir
+                            file_optimizado = comprimir_imagen_webp(file)
+                            
                             with st.spinner(f"Subiendo {label}..."):
                                 try:
-                                    resp = cloudinary.uploader.upload(file)
+                                    resp = cloudinary.uploader.upload(file_optimizado, resource_type="image", format="webp")
                                     payload = {key: [{"url": resp['secure_url']}]}
                                     if upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], payload):
                                         st.session_state.selected_event['fields'].update(payload)
                                         st.rerun()
-                                    else: st.error("Error conectando con Airtable")
+                                    else: st.error("Error Airtable")
                                 except Exception as e: st.error(f"Error: {str(e)}")
 
-            if st.button("⬅️ REGRESAR A LISTADO"):
+            if st.button("⬅️ REGRESAR A LISTADO DE EVENTOS", use_container_width=True):
                 st.session_state.selected_event = None; st.rerun()
 
-            st.markdown(f"### 📸 Cargar Evidencia: {fields.get('Tipo')}")
+            st.divider()
+            
+            # HEADER NUEVO FORMATO
+            loc_corta = obtener_ubicacion_corta(fields)
+            fecha_fmt = formatear_fecha_larga(fields.get('Fecha'))
+            hora = fields.get('Hora', '--')
+            
+            st.markdown(f"""
+            ### 📸 {fields.get('Tipo')} - {loc_corta}
+            **{fecha_fmt} | {hora}**
+            """)
+            st.divider()
 
             # SECCIÓN 1: INICIO
             st.markdown("#### 1. Foto de Inicio")
             c1, c2 = st.columns(2)
             render_celda_auto(c1, "Foto de equipo", "Foto de Equipo", fields)
 
-            # SECCIÓN 2: ACTIVIDAD
+            # SECCIÓN 2: ACTIVIDAD (GRID CORRECTO PARA MOBILE 1,2,3,4)
             st.markdown("#### 2. Fotos de Actividad")
-            cols_act = st.columns(2)
             keys_act = ["Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07"]
-            for i, k in enumerate(keys_act):
-                render_celda_auto(cols_act[i%2], k, k, fields)
+            
+            # Iteramos de 2 en 2 para crear filas explícitas
+            for i in range(0, len(keys_act), 2):
+                col_row = st.columns(2)
+                # Columna Izquierda
+                render_celda_auto(col_row[0], keys_act[i], keys_act[i], fields)
+                # Columna Derecha (si existe el par)
+                if i + 1 < len(keys_act):
+                    render_celda_auto(col_row[1], keys_act[i+1], keys_act[i+1], fields)
 
             # SECCIÓN 3: REPORTE
             is_sucursal = fields.get('Tipo') == "Actividad en Sucursal"
             t_sec3 = "3. Reporte y Lista" if is_sucursal else "3. Reporte Firmado"
             st.markdown(f"#### {t_sec3}")
             c_rep, c_list = st.columns(2)
+            
             render_celda_auto(c_rep, "Reporte firmado", "Reporte Firmado", fields)
             if is_sucursal:
                 render_celda_auto(c_list, "Lista de asistencia", "Lista de Asistencia", fields)
+            
+            st.divider()
+            if st.button("⬅️ REGRESAR A LISTADO DE EVENTOS (FINAL)", use_container_width=True):
+                st.session_state.selected_event = None; st.rerun()
