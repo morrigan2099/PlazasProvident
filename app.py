@@ -21,7 +21,7 @@ st.markdown("""
 <style>
     /* --- 1. TEMA GENERAL --- */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        /* Dejamos que Streamlit maneje el fondo */
+        /* Streamlit maneja el fondo */
     }
 
     /* --- 2. LOGOTIPO DINÁMICO --- */
@@ -160,7 +160,6 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
-# --- LOGO DINÁMICO (BASE64) ---
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
@@ -209,10 +208,35 @@ def check_evidencia_completa(fields):
     return False
 
 # ==============================================================================
-# 3. FUNCIONES DE BASE DE DATOS (AIRTABLE MAESTRA)
+# 3. FUNCIONES DE API AIRTABLE (METADATA + DATOS)
 # ==============================================================================
 
-# --- USUARIOS ---
+# --- METADATA (PARA OBTENER LISTAS DE BASES Y TABLAS REALES) ---
+def api_get_all_bases():
+    """Consulta la API de Metadatos para listar todas las bases de la cuenta"""
+    url = "https://api.airtable.com/v0/meta/bases"
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            # Devuelve diccionario {Nombre: ID}
+            return {b['name']: b['id'] for b in r.json().get('bases', [])}
+    except: pass
+    return {}
+
+def api_get_all_tables(base_id):
+    """Consulta la API de Metadatos para listar tablas de una base específica"""
+    url = f"https://api.airtable.com/v0/meta/bases/{base_id}/tables"
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
+    try:
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            # Devuelve diccionario {Nombre: ID}
+            return {t['name']: t['id'] for t in r.json().get('tables', [])}
+    except: pass
+    return {}
+
+# --- GESTIÓN DE CONFIGURACIÓN Y USUARIOS (BASE MAESTRA) ---
 def cargar_usuarios_airtable():
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
@@ -249,7 +273,6 @@ def eliminar_usuario_airtable(record_id):
     r = requests.delete(f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}/{record_id}", headers=headers)
     return r.status_code == 200
 
-# --- CONFIGURACIÓN ---
 def cargar_config_airtable():
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
@@ -273,10 +296,11 @@ def cargar_config_airtable():
 def guardar_config_airtable(base_name, base_id, table_name, table_id):
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
+    # Guardamos siempre activo
     fields = {"Nombre_Base": base_name, "ID_Base": base_id, "Nombre_Tabla": table_name, "ID_Tabla": table_id, "Activo": True}
     requests.post(url, json={"fields": fields}, headers=headers)
 
-# --- FUNCIONES ESTÁNDAR ---
+# --- FUNCIONES ESTÁNDAR (DATOS) ---
 def get_records(base_id, table_id, year, plaza):
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
@@ -315,8 +339,6 @@ def delete_field_from_airtable(base_id, table_id, record_id, field):
     return r.status_code == 200
 
 def registrar_historial(accion, usuario, sucursal, detalles):
-    # En esta versión sin archivos locales persistentes, el historial local se borra al reiniciar.
-    # Podrías crear una tabla "Historial" en Airtable si deseas guardarlo permanentemente.
     pass 
 
 # ==============================================================================
@@ -418,13 +440,50 @@ else:
 
         with tab_config_db:
             st.subheader("Agregar Configuración de Visibilidad")
-            with st.form("add_config"):
-                c1, c2 = st.columns(2); nb = c1.text_input("Nombre Base (Ej: Provident 2025)"); ib = c2.text_input("ID Base (app...)")
-                c3, c4 = st.columns(2); nt = c3.text_input("Nombre Tabla (Ej: Enero)"); it = c4.text_input("ID Tabla (tbl...)")
-                if st.form_submit_button("➕ Agregar", type="primary"):
-                    if nb and ib and nt and it: guardar_config_airtable(nb, ib, nt, it); st.success("Agregado"); st.rerun()
-                    else: st.error("Faltan datos")
+            st.info("El sistema consultará tus Bases reales en Airtable.")
+            
+            # 1. Obtener bases reales
+            with st.spinner("Obteniendo Bases de Airtable..."):
+                real_bases = api_get_all_bases()
+            
+            if not real_bases:
+                st.error("No se pudieron obtener bases. Revisa tu Token.")
+            else:
+                # 2. Selección de Base
+                selected_base_name = st.selectbox("Selecciona la Base:", list(real_bases.keys()))
+                selected_base_id = real_bases[selected_base_name]
+                
+                # 3. Obtener tablas reales de esa base
+                with st.spinner(f"Obteniendo tablas de {selected_base_name}..."):
+                    real_tables = api_get_all_tables(selected_base_id)
+                
+                if not real_tables:
+                    st.warning("Esta base no tiene tablas o no se pudieron leer.")
+                else:
+                    # 4. Selección Múltiple de Tablas
+                    st.markdown(f"**Tablas disponibles en {selected_base_name}:**")
+                    selected_tables_names = st.multiselect("Selecciona las tablas (Meses) a habilitar:", list(real_tables.keys()))
+                    
+                    # 5. Botón de Guardar (Acción única)
+                    if st.button("💾 GUARDAR CONFIGURACIÓN", type="primary"):
+                        if selected_tables_names:
+                            count = 0
+                            progress_text = st.empty()
+                            for t_name in selected_tables_names:
+                                t_id = real_tables[t_name]
+                                guardar_config_airtable(selected_base_name, selected_base_id, t_name, t_id)
+                                count += 1
+                                progress_text.text(f"Guardando {t_name}...")
+                            
+                            st.success(f"✅ Se agregaron {count} tablas a la configuración exitosamente.")
+                            st.rerun()
+                        else:
+                            st.warning("Selecciona al menos una tabla.")
+            
+            st.divider()
+            st.markdown("#### Configuración Actual Guardada:")
             st.json(cargar_config_airtable())
+
         main_area = tab_main
     else: main_area = st.container()
 
