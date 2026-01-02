@@ -19,7 +19,7 @@ st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* --- LOGO DINÁMICO --- */
+    /* LOGO DINÁMICO */
     .logo-light { display: none; }
     .logo-dark { display: block; }
     @media (prefers-color-scheme: dark) {
@@ -29,7 +29,7 @@ st.markdown("""
     [data-theme="dark"] .logo-light { display: block !important; }
     [data-theme="dark"] .logo-dark { display: none !important; }
 
-    /* --- ESTILOS GENERALES --- */
+    /* ESTILOS GENERALES */
     .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
     .streamlit-expanderContent { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #333333 !important; border-top: none !important; }
     .streamlit-expanderHeader p, .streamlit-expanderHeader span, .streamlit-expanderContent p, .streamlit-expanderContent span, .streamlit-expanderContent div { color: #ffffff !important; }
@@ -38,12 +38,9 @@ st.markdown("""
     .stButton button[kind="primary"]:hover { background-color: #009624 !important; }
     .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
     
-    /* Uploader */
     [data-testid="stFileUploader"] section { min-height: 0px !important; padding: 10px !important; border: 2px dashed #00b0ff !important; }
     [data-testid="stFileUploader"] section::after { content: "➕"; font-size: 32px; color: #00b0ff !important; display: block; }
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
-    
-    /* Texto compacto en detalles */
     .compact-md p { margin-bottom: 0px !important; line-height: 1.4 !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -77,8 +74,7 @@ cloudinary.config(
 def limpiar_clave(texto):
     if not isinstance(texto, str): return str(texto).lower()
     texto = unicodedata.normalize('NFD', texto)
-    texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
-    return re.sub(r'[^a-z0-9]', '', texto.lower())
+    return re.sub(r'[^a-z0-9]', '', ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower())
 
 def formatear_fecha_larga(fecha_str):
     if not fecha_str: return "Fecha pendiente"
@@ -108,29 +104,20 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
-# --- LOGO DINÁMICO ---
 def get_base64_image(image_path):
-    with open(image_path, "rb") as img_file:
-        return base64.b64encode(img_file.read()).decode()
+    with open(image_path, "rb") as img_file: return base64.b64encode(img_file.read()).decode()
 
 def render_logo_dinamico(is_banner=False):
-    light_path = os.path.join("assets", "lightlogo.png")
-    dark_path = os.path.join("assets", "darklogo.png")
+    light_path, dark_path = os.path.join("assets", "lightlogo.png"), os.path.join("assets", "darklogo.png")
     width_css = "width: 100%;" if is_banner else "width: 150px; max-width: 100%;"
-    
     if os.path.exists(light_path) and os.path.exists(dark_path):
-        b64_light = get_base64_image(light_path)
-        b64_dark = get_base64_image(dark_path)
-        html = f"""<div style="text-align: center;"><img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}"><img src="data:image/png;base64,{b64_dark}" class="logo-dark" style="{width_css}"></div>"""
-        st.markdown(html, unsafe_allow_html=True)
+        b64_light, b64_dark = get_base64_image(light_path), get_base64_image(dark_path)
+        st.markdown(f"""<div style="text-align: center;"><img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}"><img src="data:image/png;base64,{b64_dark}" class="logo-dark" style="{width_css}"></div>""", unsafe_allow_html=True)
     else: st.markdown("## 🏦 **Provident**")
 
 def get_imagen_plantilla(tipo_evento):
-    carpeta_assets = "assets"
-    url_default = "https://via.placeholder.com/400x300.png?text=Provident"
-    if not tipo_evento: tipo_evento = "default"
+    carpeta_assets, url_default, clave = "assets", "https://via.placeholder.com/400x300.png?text=Provident", limpiar_clave(str(tipo_evento))
     if not os.path.exists(carpeta_assets): return url_default
-    clave = limpiar_clave(str(tipo_evento))
     try:
         for f in os.listdir(carpeta_assets):
             if limpiar_clave(os.path.splitext(f)[0]) == clave: return os.path.join(carpeta_assets, f)
@@ -141,17 +128,15 @@ def get_imagen_plantilla(tipo_evento):
 
 def normalizar_texto_simple(texto):
     if not isinstance(texto, str): return str(texto).lower()
-    texto = unicodedata.normalize('NFD', texto)
-    return ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower()
+    return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn').lower()
 
 def check_evidencia_completa(fields):
-    claves = ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]
-    for k in claves: 
+    for k in ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]:
         if fields.get(k): return True
     return False
 
 # ==============================================================================
-# 3. FUNCIONES AIRTABLE (CORE)
+# 3. FUNCIONES AIRTABLE (CORE + DEBUG)
 # ==============================================================================
 def airtable_request(method, url, data=None, params=None):
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
@@ -160,13 +145,17 @@ def airtable_request(method, url, data=None, params=None):
         elif method == "POST": r = requests.post(url, json=data, headers=headers)
         elif method == "PATCH": r = requests.patch(url, json=data, headers=headers)
         elif method == "DELETE": r = requests.delete(url, headers=headers)
+        
+        # --- DEBUG VISUAL SI FALLA ---
+        if r.status_code not in [200, 201, 202]:
+            st.error(f"⚠️ ERROR AIRTABLE ({r.status_code}): {r.text}")
+            # Si el error es de campos desconocidos, ayuda al usuario
+            if "UNKNOWN_FIELD_NAME" in r.text:
+                st.warning(f"Revisa los nombres de las columnas. Airtable dice que no encuentra algún campo de los que enviamos: {json.dumps(data)}")
         return r
     except Exception as e:
-        # Aquí creamos una respuesta falsa para transportar el error a la pantalla
-        class MockResponse:
-            status_code = 500
-            text = f"Error Interno de Python: {str(e)}"
-        return MockResponse()
+        st.error(f"❌ Error de Conexión Python: {str(e)}")
+        return None
 
 def api_get_all_bases():
     r = airtable_request("GET", "https://api.airtable.com/v0/meta/bases")
@@ -189,49 +178,41 @@ def get_records(base_id, table_id, year, plaza):
     filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     return filtered
 
-# --- NUEVA FUNCIÓN: BÚSQUEDA GLOBAL DE SOLICITUDES ---
 def get_all_pending_requests():
     """Busca en TODAS las bases y tablas configuradas registros con Estado_Bloqueo = 'Solicitado'"""
     config = cargar_config_airtable()
     pending_list = []
-    
-    # Iterar sobre todas las bases y tablas de la configuración
     for base_name, base_id in config['bases'].items():
         tables = config['tables'].get(base_id, {})
         for table_name, table_id in tables.items():
-            # Usar filtro de servidor para no descargar todo (optimización)
-            # filterByFormula: {Estado_Bloqueo}='Solicitado'
             params = {"filterByFormula": "{Estado_Bloqueo}='Solicitado'"}
             r = airtable_request("GET", f"https://api.airtable.com/v0/{base_id}/{table_id}", params=params)
-            
             if r and r.status_code == 200:
-                records = r.json().get('records', [])
-                for rec in records:
-                    # Añadir metadatos para saber de dónde viene
-                    rec['metadata'] = {
-                        "base_id": base_id,
-                        "table_id": table_id,
-                        "base_name": base_name,
-                        "table_name": table_name
-                    }
+                for rec in r.json().get('records', []):
+                    rec['metadata'] = {"base_id": base_id, "table_id": table_id, "base_name": base_name, "table_name": table_name}
                     pending_list.append(rec)
     return pending_list
 
-# --- LÓGICA DE RESPALDO Y BLOQUEO (MEJORADA PARA DEBUG) ---
+# --- LÓGICA DE RESPALDO Y BLOQUEO ---
 def crear_respaldo_evento(fields_original):
-    """Copia todos los campos relevantes a la tabla de respaldo"""
+    """Copia campos a la tabla de respaldo, LIMPIANDO DATOS VACÍOS para evitar errores 422"""
     campos_copiar = ["Tipo", "Fecha", "Hora", "Sucursal", "Seccion", "Ruta a seguir", "Punto de reunion", "Municipio", "Cantidad", "AM Responsable", "DM Responsable", "Teléfono AM", "Teléfono DM", "Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]
     new_data = {}
+    
     for k in campos_copiar:
-        if k in fields_original:
-            # Para imagenes, Airtable necesita una lista de dicts con url
-            if isinstance(fields_original[k], list) and len(fields_original[k]) > 0 and 'url' in fields_original[k][0]:
-                new_data[k] = [{'url': img['url']} for img in fields_original[k]]
+        val = fields_original.get(k)
+        # ⚠️ IMPORTANTE: Solo agregamos al payload si tiene valor. Airtable odia recibir {"Campo": None}
+        if val not in [None, "", []]:
+            # Procesar adjuntos para formato Airtable
+            if isinstance(val, list) and len(val) > 0 and 'url' in val[0]:
+                new_data[k] = [{'url': img['url']} for img in val]
             else:
-                new_data[k] = fields_original[k]
+                new_data[k] = val
+    
+    # Debug: Mostrar qué se está enviando si falla
+    # st.write("Enviando a respaldo:", new_data) 
     
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{BACKUP_TABLE_ID}"
-    # Devolvemos el objeto respuesta completo para analizar errores
     return airtable_request("POST", url, {"fields": new_data})
 
 def solicitar_desbloqueo(base_id, table_id, record_id):
@@ -242,19 +223,15 @@ def aprobar_desbloqueo_admin(base_id, table_id, record_full_data):
     # 1. Crear Respaldo
     resp_backup = crear_respaldo_evento(record_full_data['fields'])
     
-    # Verificar si el respaldo fue exitoso
     if resp_backup and resp_backup.status_code == 200:
         # 2. Desbloquear Original
         url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_full_data['id']}"
         resp_update = airtable_request("PATCH", url, {"fields": {"Estado_Bloqueo": "Desbloqueado"}})
-        if resp_update and resp_update.status_code == 200:
-            return True, "Éxito"
-        else:
-            return False, f"Respaldo OK, pero falló desbloqueo original: {resp_update.text}"
+        if resp_update and resp_update.status_code == 200: return True, "Éxito"
+        else: return False, f"Respaldo OK, pero falló desbloqueo original."
     else:
-        # Aquí capturamos el error exacto de Airtable (ej: columna no existe)
-        error_msg = resp_backup.text if resp_backup else "Error de conexión en respaldo"
-        return False, f"Fallo al crear respaldo: {error_msg}"
+        # El error ya se muestra en pantalla gracias a airtable_request
+        return False, "Fallo al crear respaldo (ver error arriba)"
 
 # --- GESTIÓN USUARIOS Y CONFIG ---
 def cargar_usuarios_airtable():
@@ -306,8 +283,6 @@ def upload_evidence_to_airtable(base_id, table_id, record_id, updates):
 def delete_field_from_airtable(base_id, table_id, record_id, field):
     r = airtable_request("PATCH", f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}", {"fields": {field: None}})
     return r.status_code == 200 if r else False
-
-def registrar_historial(accion, usuario, sucursal, detalles): pass 
 
 # ==============================================================================
 # 4. SESIÓN
@@ -416,7 +391,6 @@ else:
                 for p in global_pending:
                     pf = p['fields']
                     meta = p['metadata']
-                    # Header informativo
                     label = f"[{meta['base_name']} / {meta['table_name']}] - {pf.get('Sucursal')} - {pf.get('Fecha')} ({pf.get('Tipo')})"
                     
                     with st.expander(label, expanded=True):
@@ -427,13 +401,12 @@ else:
                         with c2:
                             if st.button("✅ APROBAR", key=f"ga_{p['id']}", type="primary", use_container_width=True):
                                 with st.spinner("Creando respaldo y desbloqueando..."):
-                                    # Usamos los IDs guardados en metadata para procesar
                                     ok, msg = aprobar_desbloqueo_admin(meta['base_id'], meta['table_id'], p)
                                     if ok:
                                         st.success("¡Aprobado con éxito!"); st.rerun()
                                     else:
-                                        st.error(f"❌ Error crítico: {msg}")
-                                        st.info("Revisa que la tabla 'MODIFICACION CON PERMISO' tenga EXACTAMENTE las mismas columnas que el original.")
+                                        # Aquí el error ya se imprimió en st.error dentro de airtable_request, pero mostramos esto por si acaso
+                                        st.error(f"Fallo final: {msg}")
 
         main_area = tm
     else: main_area = st.container()
@@ -492,25 +465,26 @@ else:
                     if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Hecho"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view); st.rerun()
                     else: st.error("Error")
 
-        # 3. CARGA EVIDENCIA
+        # 3. CARGA EVIDENCIA (CON BLOQUEO)
         else:
             evt = st.session_state.selected_event; f=evt['fields']
             if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
             st.divider(); st.markdown(f"### 📸 {f.get('Tipo')} - {obtener_ubicacion_corta(f)}"); st.divider()
             
+            # Lógica de Bloqueo
             ya_tiene = check_evidencia_completa(f)
             estado = f.get('Estado_Bloqueo')
             bloqueado = ya_tiene and (estado != 'Desbloqueado')
 
             if bloqueado:
-                st.warning("🔒 Registro Bloqueado.")
+                st.warning("🔒 Registro Bloqueado. Se requiere permiso para modificar.")
                 if estado == 'Solicitado': st.info("⏳ Solicitud enviada. Esperando al admin.")
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
                         with st.spinner("Enviando..."):
                             resp = solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'])
                             if resp and resp.status_code==200: st.success("Enviado."); evt['fields']['Estado_Bloqueo']='Solicitado'; st.rerun()
-                            else: st.error("Error: Falta columna 'Estado_Bloqueo' en Airtable.")
+                            else: pass # Error ya mostrado por airtable_request
 
             def render_cell(col, k, label):
                 with col:
