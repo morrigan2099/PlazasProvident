@@ -31,7 +31,6 @@ cloudinary.config(
 )
 
 # --- SUCURSALES (Definición Oficial) ---
-# Se agregó Tehuacan
 SUCURSALES_OFICIALES = [
     "Cordoba", "Orizaba", "Xalapa", "Puebla", 
     "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"
@@ -48,7 +47,6 @@ YEAR_ACTUAL = 2025 # Año fijo
 def formatear_fecha_larga(fecha_str):
     """
     Convierte '2025-01-25' a 'Sábado 25 de Enero de 2025'.
-    Hecho manualmente para no depender de la configuración regional del servidor.
     """
     if not fecha_str: return "Fecha pendiente"
     
@@ -68,24 +66,31 @@ def formatear_fecha_larga(fecha_str):
 
 def get_imagen_plantilla(tipo_evento):
     """
-    Devuelve la URL o ruta de la imagen según el tipo de evento.
-    Puedes guardar tus imágenes en una carpeta local llamada 'assets'.
+    Busca en la carpeta local 'assets' un archivo que coincida EXACTAMENTE 
+    con el nombre del TIPO. Prueba extensiones comunes.
+    Ej: TIPO='Volanteo' -> busca assets/Volanteo.png, assets/Volanteo.jpg...
     """
-    # Diccionario de imágenes por defecto (URLs públicas o rutas locales)
-    # Si tienes archivos locales, usa: "assets/volanteo.jpg"
-    imagenes = {
-        "Volanteo": "https://cdn-icons-png.flaticon.com/512/2983/2983677.png", 
-        "Actividad en Sucursal": "https://cdn-icons-png.flaticon.com/512/921/921347.png",
-        "Cobranza": "https://cdn-icons-png.flaticon.com/512/2645/2645897.png",
-        "Default": "https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png"
-    }
+    if not tipo_evento:
+        tipo_evento = "default"
+
+    nombre_archivo = str(tipo_evento).strip()
+    extensiones = [".png", ".jpg", ".jpeg", ".webp"]
+    carpeta_assets = "assets"
+
+    # 1. Buscar coincidencia exacta en assets
+    for ext in extensiones:
+        ruta_completa = os.path.join(carpeta_assets, f"{nombre_archivo}{ext}")
+        if os.path.exists(ruta_completa):
+            return ruta_completa
     
-    # Intenta buscar coincidencia parcial, si no, devuelve default
-    tipo = str(tipo_evento).lower()
-    if "volanteo" in tipo: return imagenes["Volanteo"]
-    if "sucursal" in tipo: return imagenes["Actividad en Sucursal"]
-    
-    return imagenes["Default"]
+    # 2. Si no encuentra la específica, busca una 'default' local
+    for ext in extensiones:
+        ruta_default = os.path.join(carpeta_assets, f"default{ext}")
+        if os.path.exists(ruta_default):
+            return ruta_default
+
+    # 3. Fallback online (por si no existe carpeta assets o imagen default)
+    return "https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png"
 
 def normalizar_texto(texto):
     if not isinstance(texto, str): return str(texto).lower()
@@ -318,7 +323,7 @@ else:
     with main_area:
         st.title(f"Gestión: {st.session_state.get('current_plaza_view', sel_plaza)}")
 
-        # VISTA A: LISTADO DE EVENTOS (NUEVO DISEÑO 2 COLUMNAS)
+        # VISTA A: LISTADO DE EVENTOS (2 COLUMNAS + ASSETS)
         if st.session_state.selected_event is None:
             if 'search_results' in st.session_state:
                 recs = st.session_state.search_results
@@ -326,19 +331,19 @@ else:
                     for r in recs:
                         f = r['fields']
                         
-                        # Contenedor estilo tarjeta para cada evento
+                        # Contenedor estilo tarjeta
                         with st.expander(f"{f.get('Fecha')} - {f.get('Tipo', 'Evento')}", expanded=True):
                             
                             col_img, col_data = st.columns([1, 2.5])
                             
-                            # --- COLUMNA 1: IMAGEN PLANTILLA ---
+                            # --- COLUMNA 1: IMAGEN DESDE ASSETS ---
                             with col_img:
-                                img_url = get_imagen_plantilla(f.get('Tipo'))
-                                st.image(img_url, use_container_width=True)
+                                # Busca en assets/NombreTipo.png (o jpg/jpeg)
+                                img_path = get_imagen_plantilla(f.get('Tipo'))
+                                st.image(img_path, use_container_width=True)
                                 
                             # --- COLUMNA 2: DATOS DEL EVENTO ---
                             with col_data:
-                                # Fecha formateada
                                 fecha_larga = formatear_fecha_larga(f.get('Fecha'))
                                 st.markdown(f"### 🗓️ {fecha_larga}")
                                 
@@ -356,7 +361,7 @@ else:
                                         st.session_state.selected_event = r
                                         st.rerun()
                                 with c_btn_2:
-                                    # Botón Reagendado (Solo visual por ahora)
+                                    # Botón Reagendado (Visual)
                                     if st.button("⚠️ EVENTO REAGENDADO", key=f"re_{r['id']}", use_container_width=True):
                                         st.warning("Funcionalidad de reagendar pendiente de conectar con Airtable.")
                                         registrar_historial("Click Reagendar", st.session_state.user_name, st.session_state.sucursal_actual, f"Evento {f.get('Fecha')}")
@@ -367,7 +372,7 @@ else:
             else:
                 st.info("👈 Presiona 'ACTUALIZAR EVENTOS' en la barra lateral.")
 
-        # VISTA B: FORMULARIO DE CARGA (MODIFICADO)
+        # VISTA B: FORMULARIO DE CARGA
         else:
             evt = st.session_state.selected_event
             fields = evt['fields']
@@ -401,19 +406,17 @@ else:
                 
                 st.markdown("---")
                 
-                # 3. REPORTE FIRMADO (AHORA SOLO IMAGEN)
+                # 3. REPORTE FIRMADO (IMAGEN)
                 st.markdown("#### 3. Reporte Firmado")
                 c3, c4 = st.columns([3,1])
-                # Cambio: Solo acepta imagenes
                 uploads['Reporte firmado'] = c3.file_uploader("Foto del Reporte", type=['jpg','png','jpeg'], key="u_rep")
                 if fields.get('Reporte firmado'): c4.image(fields['Reporte firmado'][0]['url'], width=100)
 
-                # 4. LISTA ASISTENCIA (CONDICIONAL - SOLO IMAGEN)
+                # 4. LISTA ASISTENCIA (IMAGEN - CONDICIONAL)
                 if fields.get('Tipo') == "Actividad en Sucursal":
                     st.markdown("---")
                     st.markdown("#### 4. Lista de Asistencia")
                     c5, c6 = st.columns([3,1])
-                    # Cambio: Solo acepta imagenes
                     uploads['Lista de asistencia'] = c5.file_uploader("Foto de Lista", type=['jpg','png','jpeg'], key="u_lst")
                     if fields.get('Lista de asistencia'): c6.image(fields['Lista de asistencia'][0]['url'], width=100)
 
