@@ -14,58 +14,55 @@ import re
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
-# --- CSS: ESTILO MINIMALISTA PARA EL UPLOADER ---
+# --- CSS: ESTILO MINIMALISTA Y GRID ---
 st.markdown("""
 <style>
-    /* Ocultar sidebar y controles */
+    /* Ocultar sidebar y controles nativos */
     [data-testid="stSidebar"] {display: none;}
     [data-testid="collapsedControl"] {display: none;}
     
-    /* --- HACK PARA EL UPLOADER MINIMALISTA (CUADRO CON +) --- */
+    /* --- ESTILO BOTÓN (+) --- */
+    [data-testid="stFileUploader"] small {display: none;}
+    [data-testid="stFileUploader"] button {display: none;}
+    [data-testid="stFileUploader"] section > div {display: none;} /* Oculta texto interno */
     
-    /* 1. Ocultar el texto de "Limit 200MB" */
-    [data-testid="stFileUploader"] small {
-        display: none;
-    }
-    
-    /* 2. Ocultar el botón original y el texto "Drag and drop" */
-    [data-testid="stFileUploader"] button {
-        display: none;
-    }
-    [data-testid="stFileUploader"] section > div {
-        display: none; /* Oculta los textos internos */
-    }
-    
-    /* 3. Estilizar la caja para que sea un cuadro simple */
+    /* Caja del uploader */
     [data-testid="stFileUploader"] section {
         min-height: 0px !important;
-        padding: 10px !important;
-        background-color: #f0f2f6; /* Gris claro */
-        border: 2px dashed #cccccc;
-        border-radius: 10px;
+        padding: 15px !important;
+        background-color: #f8f9fa;
+        border: 2px dashed #cbd5e0;
+        border-radius: 12px;
         align-items: center;
         justify-content: center;
         display: flex;
+        cursor: pointer;
+        transition: all 0.2s ease;
     }
     
-    /* 4. Agregar el signo de MÁS (+) */
+    /* Signo de MÁS (+) */
     [data-testid="stFileUploader"] section::after {
-        content: "➕";  /* Emoji o carácter de más */
-        font-size: 30px;
-        color: #888;
+        content: "➕";
+        font-size: 24px;
+        color: #718096;
         visibility: visible;
         display: block;
     }
 
-    /* Efecto al pasar el mouse */
+    /* Hover */
     [data-testid="stFileUploader"] section:hover {
-        background-color: #e0e2e6;
-        border-color: #999;
+        background-color: #e2e8f0;
+        border-color: #a0aec0;
+        transform: scale(1.02);
     }
-
-    /* Cuando ya hay archivo cargado (éxito) */
-    .uploaded-success {
-        border: 2px solid #28a745 !important;
+    
+    /* Títulos de las fotos (Captions) más bonitos */
+    .photo-label {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #2d3748;
+        margin-bottom: 5px;
+        display: block;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -307,11 +304,10 @@ else:
                 st.session_state.current_base_id = base_id; st.session_state.current_table_id = table_id; st.session_state.current_plaza_view = sel_plaza
     st.divider()
 
-    # --- PESTAÑAS ADMIN ---
+    # PESTAÑAS ADMIN
     if st.session_state.user_role == "admin":
         tab_main, tab_users, tab_config_db, tab_hist = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Configuración DB", "📜 Historial"])
         
-        # --- TAB USUARIOS ---
         with tab_users:
             users_db = cargar_usuarios()
             st.subheader("Gestión de Accesos")
@@ -319,7 +315,6 @@ else:
             seleccion = st.selectbox("🔍 Seleccionar Usuario para Editar:", opciones_usuarios)
             if seleccion == "(Crear Nuevo)": val_user = ""; val_pass = ""; val_role = "user"; val_plazas = []; es_edicion = False
             else: data_u = users_db[seleccion]; val_user = seleccion; val_pass = data_u.get('password', ''); val_role = data_u.get('role', 'user'); val_plazas = data_u.get('plazas', []); es_edicion = True
-
             with st.form("form_usuarios_admin"):
                 c1, c2 = st.columns(2)
                 new_user = c1.text_input("Usuario (ID)", value=val_user)
@@ -336,18 +331,15 @@ else:
                         if es_edicion and new_user != seleccion: del users_db[seleccion]
                         users_db[new_user] = {"password": new_pass, "role": new_role, "plazas": new_plazas}
                         guardar_usuarios(users_db); st.success(f"Usuario {new_user} guardado."); st.rerun()
-
             if es_edicion:
                 st.markdown("---")
                 if st.button("🗑️ Eliminar Usuario", type="secondary"):
                     if seleccion in users_db: del users_db[seleccion]; guardar_usuarios(users_db); st.warning(f"Usuario eliminado."); st.rerun()
-
             st.markdown("---")
             st.markdown("#### Lista de Usuarios Activos")
             df_users = pd.DataFrame([{"Usuario": k, "Rol": v['role'], "Plazas": ", ".join(v['plazas'])} for k,v in users_db.items()])
             st.dataframe(df_users, use_container_width=True)
 
-        # --- TAB CONFIG DB ---
         with tab_config_db:
             st.subheader("Control de Visibilidad de Base de Datos")
             current_config = cargar_config_db(); current_bases = current_config.get("bases", {}); current_tables = current_config.get("tables", {})
@@ -416,27 +408,60 @@ else:
                     if ex: st.success("✅ Creado."); registrar_historial("Reagendar",st.session_state.user_name,nsu,f"Orig:{f_orig.get('Fecha')}->New:{nf}"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id,st.session_state.current_table_id,YEAR_ACTUAL,st.session_state.current_plaza_view); st.rerun()
                     else: st.error(f"Error: {rs}")
 
-        # 3. CARGA EVIDENCIA
+        # 3. CARGA EVIDENCIA (GRID MEJORADO)
         else:
             evt = st.session_state.selected_event; fields = evt['fields']
             if st.button("⬅️ REGRESAR"): st.session_state.selected_event = None; st.rerun()
             st.markdown(f"### 📸 Cargar Evidencia: {fields.get('Tipo')}")
+            
             with st.form("upload_form"):
                 uploads = {}
-                st.caption("1. Foto Equipo"); c1,c2=st.columns([3,1]); uploads['Foto de equipo']=c1.file_uploader("Eq",key="ue",label_visibility="collapsed", type=['jpg','png','jpeg'])
-                if fields.get('Foto de equipo'): c2.image(fields['Foto de equipo'][0]['url'],width=80)
-                st.caption("2. Actividad"); g=[("Foto 01","Foto 02"),("Foto 03","Foto 04"),("Foto 05","Foto 06"),("Foto 07",None)]
-                for l1,l2 in g:
-                    ca,cb=st.columns(2); uploads[l1]=ca.file_uploader(l1,key=l1,label_visibility="collapsed", type=['jpg','png','jpeg'])
-                    if fields.get(l1): ca.image(fields[l1][0]['url'],width=80)
-                    if l2:
-                        uploads[l2]=cb.file_uploader(l2,key=l2,label_visibility="collapsed", type=['jpg','png','jpeg'])
-                        if fields.get(l2): cb.image(fields[l2][0]['url'],width=80)
-                st.caption("3. Reporte"); c3,c4=st.columns([3,1]); uploads['Reporte firmado']=c3.file_uploader("Rep",key="ur",label_visibility="collapsed", type=['jpg','png','jpeg'])
-                if fields.get('Reporte firmado'): c4.image(fields['Reporte firmado'][0]['url'],width=80)
-                if fields.get('Tipo') == "Actividad en Sucursal":
-                    st.caption("4. Lista"); c5,c6=st.columns([3,1]); uploads['Lista de asistencia']=c5.file_uploader("Lis",key="ul",label_visibility="collapsed", type=['jpg','png','jpeg'])
-                    if fields.get('Lista de asistencia'): c6.image(fields['Lista de asistencia'][0]['url'],width=80)
+
+                # 1. FOTO INICIO
+                st.markdown("#### 1. Foto de Inicio")
+                c1, c2 = st.columns(2) # Usamos columna 1 para el box para mantener tamaño controlado
+                with c1:
+                    st.caption("Foto de Equipo")
+                    uploads['Foto de equipo'] = st.file_uploader("ue", key="ue", label_visibility="collapsed", type=['jpg','png','jpeg'])
+                    if fields.get('Foto de equipo'): st.image(fields['Foto de equipo'][0]['url'], width=100)
+                
+                # 2. ACTIVIDAD (GRID 2 COLUMNAS AUTOMÁTICO)
+                st.markdown("#### 2. Fotos de Actividad")
+                cols_act = st.columns(2)
+                activity_keys = ["Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07"]
+                
+                for i, key in enumerate(activity_keys):
+                    col = cols_act[i % 2]
+                    with col:
+                        st.caption(key)
+                        uploads[key] = st.file_uploader(key, key=key, label_visibility="collapsed", type=['jpg','png','jpeg'])
+                        if fields.get(key): st.image(fields[key][0]['url'], width=100)
+                
+                # 3. REPORTE / LISTA
+                is_sucursal = fields.get('Tipo') == "Actividad en Sucursal"
+                title_sec3 = "3. Reporte Firmado y Lista de Asistencia" if is_sucursal else "3. Reporte Firmado"
+                
+                st.markdown(f"#### {title_sec3}")
+                
+                if is_sucursal:
+                    c_rep, c_list = st.columns(2)
+                    with c_rep:
+                        st.caption("Reporte Firmado")
+                        uploads['Reporte firmado'] = st.file_uploader("ur", key="ur", label_visibility="collapsed", type=['jpg','png','jpeg'])
+                        if fields.get('Reporte firmado'): st.image(fields['Reporte firmado'][0]['url'], width=100)
+                    with c_list:
+                        st.caption("Lista de Asistencia")
+                        uploads['Lista de asistencia'] = st.file_uploader("ul", key="ul", label_visibility="collapsed", type=['jpg','png','jpeg'])
+                        if fields.get('Lista de asistencia'): st.image(fields['Lista de asistencia'][0]['url'], width=100)
+                else:
+                    # Solo 1 columna para Reporte si no es sucursal
+                    c_rep, _ = st.columns(2)
+                    with c_rep:
+                        st.caption("Reporte Firmado")
+                        uploads['Reporte firmado'] = st.file_uploader("ur", key="ur", label_visibility="collapsed", type=['jpg','png','jpeg'])
+                        if fields.get('Reporte firmado'): st.image(fields['Reporte firmado'][0]['url'], width=100)
+
+                st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("💾 GUARDAR", type="primary", use_container_width=True):
                     files={k:v for k,v in uploads.items() if v}; pr=st.progress(0); ud={}; tot=len(files)
                     if not files: st.warning("Nada para subir")
