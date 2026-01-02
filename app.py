@@ -24,14 +24,10 @@ st.markdown("""
     /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
     
     /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
-    /* Aquí mostramos el lightlogo.png y ocultamos el darklogo.png */
     .logo-light { display: block; }
     .logo-dark { display: none; }
 
     /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
-    /* Aquí invertimos: Ocultamos light, Mostramos dark */
-    
-    /* Caso 1: Detectado por Sistema Operativo (Móvil) */
     @media (prefers-color-scheme: dark) {
         .logo-light { display: none !important; }
         .logo-dark { display: block !important; }
@@ -437,7 +433,13 @@ else:
             else: d=udb[sel]; rid=d['id']
             with st.form("uf"):
                 cu, cp = st.columns(2); nu=cu.text_input("User", sel if sel!="(Nuevo)" else ""); np=cp.text_input("Pass", d['password'])
-                nr=st.selectbox("Rol",["user","admin"],0 if d['role']=="user" else 1); npl=st.multiselect("Plazas", SUCURSALES_OFICIALES, d['plazas'])
+                nr=st.selectbox("Rol",["user","admin"],0 if d['role']=="user" else 1)
+                
+                # --- FIX: Validar que los defaults existan en las opciones ---
+                defaults_validos = [x for x in d['plazas'] if x in SUCURSALES_OFICIALES]
+                npl=st.multiselect("Plazas", SUCURSALES_OFICIALES, defaults_validos)
+                # -------------------------------------------------------------
+                
                 if st.form_submit_button("Guardar", type="primary"):
                     crear_actualizar_usuario_airtable(nu,np,nr,npl,rid); st.success("OK"); st.rerun()
             if rid and st.button("Eliminar", type="secondary"): eliminar_usuario_airtable(rid); st.rerun()
