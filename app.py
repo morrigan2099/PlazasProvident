@@ -12,50 +12,115 @@ from PIL import Image
 import io
 
 # ==============================================================================
-# 1. CONFIGURACIÓN Y ESTILOS
+# 1. CONFIGURACIÓN Y ESTILOS (CSS REDISEÑADO)
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
+    /* Ocultar elementos nativos */
     [data-testid="stSidebar"] {display: none;}
     [data-testid="collapsedControl"] {display: none;}
-    
-    /* UPLOADER ESTILO BOTÓN (+) */
     [data-testid="stFileUploader"] small {display: none;}
     [data-testid="stFileUploader"] button {display: none;}
     [data-testid="stFileUploader"] section > div {display: none;}
+
+    /* --- VARIABLES DE COLOR TEMA --- */
+    :root {
+        --bright-green: #00c853; /* Verde Esmeralda Brillante */
+        --bright-cyan: #00b0ff;  /* Celeste Brillante */
+        --danger-red: #dc2626;   /* Rojo Fuerte */
+    }
+
+    /* --- 1. ESTILOS DE BOTONES --- */
     
+    /* Botones PRIMARIOS (Ingresar, Guardar, Cargar) - Gradiente Verde/Celeste */
+    .stButton button[kind="primary"] {
+        background: linear-gradient(135deg, var(--bright-green), var(--bright-cyan)) !important;
+        border: none !important;
+        color: white !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.5px;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .stButton button[kind="primary"]:hover {
+        opacity: 0.95 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 12px rgba(0, 200, 83, 0.3) !important;
+    }
+    .stButton button[kind="primary"]:active {
+        transform: translateY(0px) !important;
+    }
+
+    /* Botones SECUNDARIOS (ELIMINAR) - Rojo Sólido Fondo, Texto Blanco */
+    .stButton button[kind="secondary"] {
+        background-color: var(--danger-red) !important;
+        color: white !important;
+        border: none !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease !important;
+    }
+    .stButton button[kind="secondary"]:hover {
+        background-color: #b91c1c !important; /* Rojo más oscuro */
+        box-shadow: 0 4px 6px rgba(220, 38, 38, 0.3) !important;
+    }
+    
+    /* --- 2. ESTILOS DEL UPLOADER (+) --- */
     [data-testid="stFileUploader"] section {
         min-height: 0px !important;
-        padding: 10px !important;
+        padding: 15px !important;
         background-color: #f8f9fa;
-        border: 2px dashed #a0aec0;
+        border: 3px dashed #cbd5e0; /* Borde un poco más grueso */
         border-radius: 12px;
         align-items: center;
         justify-content: center;
         display: flex;
         cursor: pointer;
+        transition: all 0.3s ease;
     }
     
+    /* Signo de MÁS (+) */
     [data-testid="stFileUploader"] section::after {
         content: "➕";
         font-size: 32px;
-        color: #4a5568;
+        color: #718096;
         visibility: visible;
         display: block;
+        transition: color 0.3s ease;
     }
 
-    .stButton button[kind="secondary"] {
-        color: #e53e3e;
-        border-color: #e53e3e;
-        width: 100%;
+    /* Hover del Uploader (Usa el color Celeste brillante) */
+    [data-testid="stFileUploader"] section:hover {
+        background-color: #e1f5fe !important; /* Fondo azul muy claro */
+        border-color: var(--bright-cyan) !important;
+        transform: scale(1.02);
     }
-    .stButton button[kind="secondary"]:hover {
-        background-color: #fff5f5;
-        border-color: #c53030;
+    [data-testid="stFileUploader"] section:hover::after {
+        color: var(--bright-cyan) !important;
     }
 
+    /* --- 3. OTROS ELEMENTOS DEL TEMA --- */
+    
+    /* Inputs y Selects al hacer foco (Borde Celeste) */
+    div[data-baseweb="input"] :focus-within, 
+    div[data-baseweb="select"] :focus-within,
+    div[data-baseweb="base-input"] :focus-within {
+        border-color: var(--bright-cyan) !important;
+        box-shadow: 0 0 0 3px rgba(0, 176, 255, 0.2) !important;
+    }
+
+    /* Spinners de carga (Celeste) */
+    .stSpinner > div {
+        border-top-color: var(--bright-cyan) !important;
+    }
+    
+    /* Barras de progreso (Verde) */
+    .stProgress > div > div > div {
+        background-color: var(--bright-green) !important;
+    }
+
+    /* Títulos de las fotos */
     .caption-text {
         font-size: 1.1rem !important;
         font-weight: 700 !important;
@@ -87,7 +152,7 @@ cloudinary.config(
 )
 
 # ==============================================================================
-# 2. FUNCIONES DE UTILIDAD
+# 2. FUNCIONES DE UTILIDAD Y COMPRESIÓN
 # ==============================================================================
 def limpiar_clave(texto):
     if not isinstance(texto, str): return str(texto).lower()
@@ -124,19 +189,24 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
-# --- NUEVA FUNCIÓN PARA EL LOGO ---
-def render_logo(width_val=150):
-    """Busca logo.png en assets, si no existe, pone texto"""
+# --- FUNCIÓN LOGO ACTUALIZADA (BANNER) ---
+def render_logo(is_banner=False):
+    """
+    Si is_banner=True, usa use_container_width para llenar el ancho.
+    Si is_banner=False (ej. en header), usa un ancho fijo pequeño.
+    """
     path_logo = os.path.join("assets", "logo.png")
     if os.path.exists(path_logo):
-        st.image(path_logo, width=width_val)
+        if is_banner:
+            # ESTO HACE QUE SE VEA COMO BANNER DEL ANCHO DEL CONTENEDOR
+            st.image(path_logo, use_container_width=True) 
+        else:
+            st.image(path_logo, width=120)
     else:
-        # Fallback elegante si no has subido el logo aun
         st.markdown(f"## 🏦 **Provident**") 
 
 def get_imagen_plantilla(tipo_evento):
     carpeta_assets = "assets" 
-    # Fallback online por si no hay assets
     url_default = "https://via.placeholder.com/400x300.png?text=Provident+Evento" 
     if not tipo_evento: tipo_evento = "default"
     if not os.path.exists(carpeta_assets): return url_default
@@ -283,8 +353,8 @@ if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
     col_izq, col_centro, col_der = st.columns([1, 2, 1])
     with col_centro:
-        # --- AQUI ESTA EL CAMBIO: USAR LA FUNCIÓN SEGURA ---
-        render_logo(width_val=200)
+        # Llama a la función con is_banner=True para que ocupe todo el ancho
+        render_logo(is_banner=True)
         
         st.markdown("### 🔐 Acceso al Sistema")
         with st.form("login_form"):
@@ -309,8 +379,8 @@ else:
     # HEADER
     c_logo, c_user, c_logout = st.columns([1, 6, 1])
     with c_logo: 
-        # --- AQUI TAMBIEN USAMOS LA FUNCIÓN SEGURA ---
-        render_logo(width_val=100)
+        # Logo pequeño en el header
+        render_logo(is_banner=False)
         
     with c_user: st.markdown(f"#### 👤 {st.session_state.user_name} | {st.session_state.user_role.upper()}")
     with c_logout:
