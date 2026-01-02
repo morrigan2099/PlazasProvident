@@ -12,109 +12,112 @@ from PIL import Image
 import io
 
 # ==============================================================================
-# 1. CONFIGURACIÓN Y ESTILOS (TEMA CLARO FORZADO AGRESIVO)
+# 1. CONFIGURACIÓN Y ESTILOS (EXPANDERS CELESTES)
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* --- 1. RESET GLOBAL A TEMA CLARO (BLANCO/NEGRO) --- */
-    
-    /* Fondo principal y textos */
+    /* --- 1. TEMA CLARO GENERAL (FONDO BLANCO) --- */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         background-color: #ffffff !important;
-        color: #000000 !important;
     }
     
-    /* Forzar textos a negro (excepto botones que definiremos luego) */
-    h1, h2, h3, h4, h5, h6, p, li, span, label, div.stMarkdown {
+    /* Textos generales de la página (fuera de expanders) a negro */
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp li, .stApp label {
         color: #000000 !important;
     }
 
-    /* --- 2. CORRECCIÓN DE ELEMENTOS DE INTERFAZ (EXPANDERS Y MENUS) --- */
-    
-    /* Expanders (Persianas) - Fondo Blanco y Borde */
+    /* --- 2. DESPLEGABLES (EXPANDERS) PERSONALIZADOS --- */
+    /* ENCABEZADO (La barra que se ve siempre) */
     .streamlit-expanderHeader {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        border: 1px solid #e0e0e0 !important;
+        background-color: #00b0ff !important; /* Celeste Brillante */
+        color: #ffffff !important;
+        border: 1px solid #00b0ff !important;
+        border-radius: 8px !important;
     }
+    
+    /* CONTENIDO (Lo que aparece al abrir) */
     .streamlit-expanderContent {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        border-top: none !important;
-        border: 1px solid #e0e0e0 !important;
-    }
-    /* El texto dentro del expander header */
-    .streamlit-expanderHeader p {
-        color: #000000 !important;
-        font-weight: 600;
+        background-color: #00b0ff !important; /* Celeste Brillante */
+        color: #ffffff !important;
+        border: 1px solid #00b0ff !important;
+        border-bottom-left-radius: 8px !important;
+        border-bottom-right-radius: 8px !important;
     }
 
-    /* Inputs y Selectboxes (Cajas de texto y menús) */
+    /* FORZAR TEXTO BLANCO DENTRO DE LOS EXPANDERS */
+    /* Esto sobreescribe la regla general de texto negro solo para lo que está dentro del expander */
+    .streamlit-expanderHeader p, 
+    .streamlit-expanderHeader span,
+    .streamlit-expanderHeader svg {
+        color: #ffffff !important;
+        fill: #ffffff !important; /* Para la flechita */
+    }
+    
+    .streamlit-expanderContent p, 
+    .streamlit-expanderContent span, 
+    .streamlit-expanderContent div, 
+    .streamlit-expanderContent h1, 
+    .streamlit-expanderContent h2, 
+    .streamlit-expanderContent h3,
+    .streamlit-expanderContent li,
+    .streamlit-expanderContent strong {
+        color: #ffffff !important;
+    }
+
+    /* --- 3. INPUTS Y MENUS (FONDO BLANCO, TEXTO NEGRO) --- */
     .stTextInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
         background-color: #ffffff !important;
         color: #000000 !important;
         border-color: #cccccc !important;
     }
-    
-    /* MENÚS DESPLEGABLES (El dropdown que aparece al hacer click) */
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul {
         background-color: #ffffff !important;
-        color: #000000 !important;
     }
     li[role="option"] {
         background-color: #ffffff !important;
         color: #000000 !important;
     }
-    /* Highlight del menú al pasar mouse */
+    /* Highlight menú */
     li[role="option"]:hover, li[role="option"][aria-selected="true"] {
-        background-color: #e3f2fd !important; /* Azul muy claro */
+        background-color: #e1f5fe !important;
     }
 
-    /* --- 3. ESTILOS DE BOTONES (TEXTO BLANCO SIEMPRE) --- */
-    
-    /* Botón PRIMARIO (Verde Sólido #00c853) */
+    /* --- 4. BOTONES --- */
+    /* Primario (Verde Sólido, Texto Blanco) */
     .stButton button[kind="primary"] {
         background-color: #00c853 !important;
         border: none !important;
-        color: #ffffff !important; /* TEXTO BLANCO */
+        color: #ffffff !important;
         font-weight: 700 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    .stButton button[kind="primary"] p {
-        color: #ffffff !important; /* Forzar p interno a blanco */
     }
     .stButton button[kind="primary"]:hover {
         background-color: #009624 !important;
     }
+    /* El texto interno del botón primario debe ser blanco */
+    .stButton button[kind="primary"] p { color: #ffffff !important; }
 
-    /* Botón SECUNDARIO (Rojo Sólido #dc2626 - Eliminar) */
+    /* Secundario (Rojo Sólido, Texto Blanco) */
     .stButton button[kind="secondary"] {
         background-color: #dc2626 !important;
-        color: #ffffff !important; /* TEXTO BLANCO */
         border: none !important;
+        color: #ffffff !important;
         font-weight: 600 !important;
-    }
-    .stButton button[kind="secondary"] p {
-        color: #ffffff !important; /* Forzar p interno a blanco */
     }
     .stButton button[kind="secondary"]:hover {
         background-color: #b91c1c !important;
-        border-color: #b91c1c !important;
-        color: #ffffff !important;
     }
+    /* El texto interno del botón secundario debe ser blanco */
+    .stButton button[kind="secondary"] p { color: #ffffff !important; }
 
-    /* --- 4. UPLOADER --- */
-    [data-testid="stFileUploader"] small {display: none;}
-    [data-testid="stFileUploader"] button {display: none;}
-    [data-testid="stFileUploader"] section > div {display: none;}
-    
+    /* --- 5. UPLOADER --- */
+    [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
     [data-testid="stFileUploader"] section {
         min-height: 0px !important;
         padding: 10px !important;
         background-color: #f8f9fa !important;
-        border: 2px dashed #00b0ff !important; /* Borde Celeste */
+        border: 2px dashed #00b0ff !important;
         border-radius: 12px;
         align-items: center;
         justify-content: center;
@@ -124,18 +127,23 @@ st.markdown("""
     [data-testid="stFileUploader"] section::after {
         content: "➕";
         font-size: 32px;
-        color: #00b0ff !important; /* Celeste */
+        color: #00b0ff !important;
         visibility: visible;
         display: block;
     }
 
-    /* --- 5. OCULTAR SIDEBAR --- */
+    /* --- 6. VARIOS --- */
     [data-testid="stSidebar"] {display: none;}
     [data-testid="collapsedControl"] {display: none;}
-
-    /* Ajuste de imágenes para que llenen contenedor */
     img { max-width: 100%; }
     
+    /* Clase para títulos de fotos (negros porque están sobre fondo blanco en la carga) */
+    .caption-text {
+        font-size: 1.1rem !important;
+        font-weight: 700 !important;
+        color: #1f2937 !important;
+        margin-bottom: 0.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -199,18 +207,9 @@ def comprimir_imagen_webp(archivo_upload):
     except: return archivo_upload
 
 def render_logo(is_banner=False):
-    """
-    is_banner=False -> Logo pequeño (Login)
-    is_banner=True -> Logo ancho completo (App Principal)
-    """
     path_logo = os.path.join("assets", "logo.png")
     if os.path.exists(path_logo):
-        if is_banner:
-            # Banner ancho completo
-            st.image(path_logo, use_container_width=True) 
-        else:
-            # Logo contenido (Login)
-            st.image(path_logo, use_container_width=True)
+        st.image(path_logo, use_container_width=True if is_banner else False, width=120 if not is_banner else None)
     else:
         st.markdown(f"## 🏦 **Provident**") 
 
@@ -265,7 +264,7 @@ def check_evidencia_completa(fields):
     return False
 
 # ==============================================================================
-# 3. FUNCIONES AIRTABLE
+# 3. FUNCIONES AIRTABLE Y LOGICA DE BORRADO
 # ==============================================================================
 def api_get_all_bases():
     url = "https://api.airtable.com/v0/meta/bases"
@@ -359,27 +358,15 @@ if 'rescheduling_event' not in st.session_state: st.session_state.rescheduling_e
 # 5. PANTALLA DE LOGIN
 # ==============================================================================
 if not st.session_state.logged_in:
-    # Espaciado superior
     st.markdown("<br><br>", unsafe_allow_html=True)
-    
-    # Columna central para el formulario
     c_izq, c_centro, c_der = st.columns([1, 2, 1])
-    
     with c_centro:
-        # LOGO CENTRADO Y CONTENIDO EN LA CAJA DE LOGIN
-        # Al usar st.columns([1,2,1]), el logo quedará centrado y de buen tamaño
-        render_logo(is_banner=False) # Usa logo normal, ajustado al ancho de columna
-        
+        render_logo(is_banner=False)
         st.markdown("<h3 style='text-align: center;'>🔐 Acceso al Sistema</h3>", unsafe_allow_html=True)
-        
         with st.form("login_form"):
             usuario_input = st.text_input("👤 Usuario:")
             pass_input = st.text_input("🔑 Contraseña:", type="password")
-            
-            # Botón verde sólido con texto blanco
-            btn = st.form_submit_button("INGRESAR", use_container_width=True, type="primary")
-            
-            if btn:
+            if st.form_submit_button("INGRESAR", use_container_width=True, type="primary"):
                 users_db = cargar_usuarios()
                 user_data = users_db.get(usuario_input)
                 if user_data and user_data['password'] == pass_input:
@@ -389,33 +376,24 @@ if not st.session_state.logged_in:
                     st.session_state.allowed_plazas = user_data.get('plazas', [])
                     registrar_historial("Login", usuario_input, "Sistema", "Inicio de sesión exitoso")
                     st.rerun()
-                else:
-                    st.error("Credenciales incorrectas.")
+                else: st.error("Credenciales incorrectas.")
 
 # ==============================================================================
 # 6. APP PRINCIPAL
 # ==============================================================================
 else:
-    # --- HEADER PRINCIPAL ---
-    # Logo Full Width (Banner) arriba del todo
-    render_logo(is_banner=True)
-    
+    # --- HEADER ---
+    render_logo(is_banner=True) # Logo Full Width
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Info Usuario (Izquierda) y Logout (Derecha)
     c_user, c_fill, c_logout = st.columns([3, 4, 1])
-    with c_user:
-        # Texto negro forzado por CSS
-        st.markdown(f"#### 👤 {st.session_state.user_name} | {st.session_state.user_role.upper()}")
+    with c_user: st.markdown(f"#### 👤 {st.session_state.user_name} | {st.session_state.user_role.upper()}")
     with c_logout:
-        # Botón rojo sólido (secondary)
         if st.button("SALIR", use_container_width=True, type="secondary"):
-            st.session_state.logged_in = False
-            st.rerun()
-            
+            st.session_state.logged_in = False; st.rerun()
     st.divider()
 
-    # TOPBAR FILTROS
+    # --- TOPBAR FILTROS ---
     with st.container():
         col_base, col_mes, col_plaza = st.columns(3)
         with col_base:
@@ -433,7 +411,7 @@ else:
             sel_plaza = st.selectbox("📍 Plaza", plazas_permitidas) if plazas_permitidas else None
             if sel_plaza: st.session_state.sucursal_actual = sel_plaza
 
-    # AUTO-CARGA
+    # --- AUTO-CARGA ---
     if base_id and table_id and sel_plaza:
         has_changed = (base_id != st.session_state.get('current_base_id') or table_id != st.session_state.get('current_table_id') or sel_plaza != st.session_state.get('current_plaza_view') or 'search_results' not in st.session_state)
         if has_changed:
@@ -444,7 +422,7 @@ else:
 
     st.divider()
 
-    # PESTAÑAS ADMIN
+    # --- ADMIN ---
     if st.session_state.user_role == "admin":
         tab_main, tab_users, tab_config_db, tab_hist = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Configuración DB", "📜 Historial"])
         with tab_users:
@@ -477,7 +455,7 @@ else:
         main_area = tab_main
     else: main_area = st.container()
 
-    # VISTAS PRINCIPALES
+    # --- VISTAS PRINCIPALES ---
     with main_area:
         if 'current_plaza_view' in st.session_state: st.markdown(f"### 📋 Eventos en {st.session_state.current_plaza_view} ({YEAR_ACTUAL})")
 
@@ -525,10 +503,7 @@ else:
 
         # 3. CARGA EVIDENCIA
         else:
-            evt = st.session_state.selected_event
-            fields = evt['fields']
-
-            # FUNCION CORE AUTO-UPLOAD
+            evt = st.session_state.selected_event; fields = evt['fields']
             def render_celda_auto(columna, key, label, fields_dict):
                 with columna:
                     st.markdown(f'<p class="caption-text">{label}</p>', unsafe_allow_html=True)
@@ -538,8 +513,7 @@ else:
                         if st.button("🗑️ Eliminar", key=f"del_{evt['id']}_{key}", type="secondary", use_container_width=True):
                             with st.spinner("Borrando..."):
                                 if delete_field_from_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], key):
-                                    del st.session_state.selected_event['fields'][key]
-                                    st.rerun()
+                                    del st.session_state.selected_event['fields'][key]; st.rerun()
                                 else: st.error("Error al borrar")
                     else:
                         file = st.file_uploader(key, key=f"up_{evt['id']}_{key}", label_visibility="collapsed", type=['jpg','png','jpeg','webp'])
@@ -547,50 +521,22 @@ else:
                             file_optimizado = comprimir_imagen_webp(file)
                             with st.spinner(f"Subiendo {label}..."):
                                 try:
-                                    resp = cloudinary.uploader.upload(file_optimizado, resource_type="image", format="webp")
-                                    payload = {key: [{"url": resp['secure_url']}]}
-                                    if upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], payload):
-                                        st.session_state.selected_event['fields'].update(payload)
-                                        st.rerun()
+                                    resp = cloudinary.uploader.upload(file_optimizado, resource_type="image", format="webp"); payload = {key: [{"url": resp['secure_url']}]}
+                                    if upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], payload): st.session_state.selected_event['fields'].update(payload); st.rerun()
                                     else: st.error("Error Airtable")
                                 except Exception as e: st.error(f"Error: {str(e)}")
 
-            if st.button("⬅️ REGRESAR A LISTADO DE EVENTOS", use_container_width=True, type="secondary"):
-                st.session_state.selected_event = None; st.rerun()
-
+            if st.button("⬅️ REGRESAR A LISTADO DE EVENTOS", use_container_width=True, type="secondary"): st.session_state.selected_event = None; st.rerun()
             st.divider()
-            
-            loc_corta = obtener_ubicacion_corta(fields)
-            fecha_fmt = formatear_fecha_larga(fields.get('Fecha'))
-            hora = fields.get('Hora', '--')
-            
-            st.markdown(f"### 📸 {fields.get('Tipo')} - {loc_corta}")
-            st.markdown(f"**{fecha_fmt} | {hora}**")
-            st.divider()
-
-            # SECCIÓN 1: INICIO
-            st.markdown("#### 1. Foto de Inicio")
-            c1, c2 = st.columns(2)
-            render_celda_auto(c1, "Foto de equipo", "Foto de Equipo", fields)
-
-            # SECCIÓN 2: ACTIVIDAD
-            st.markdown("#### 2. Fotos de Actividad")
-            keys_act = ["Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07"]
+            loc_corta = obtener_ubicacion_corta(fields); fecha_fmt = formatear_fecha_larga(fields.get('Fecha')); hora = fields.get('Hora', '--')
+            st.markdown(f"### 📸 {fields.get('Tipo')} - {loc_corta}"); st.markdown(f"**{fecha_fmt} | {hora}**"); st.divider()
+            st.markdown("#### 1. Foto de Inicio"); c1, c2 = st.columns(2); render_celda_auto(c1, "Foto de equipo", "Foto de Equipo", fields)
+            st.markdown("#### 2. Fotos de Actividad"); keys_act = ["Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07"]
             for i in range(0, len(keys_act), 2):
-                col_row = st.columns(2)
-                render_celda_auto(col_row[0], keys_act[i], keys_act[i], fields)
-                if i + 1 < len(keys_act):
-                    render_celda_auto(col_row[1], keys_act[i+1], keys_act[i+1], fields)
-
-            # SECCIÓN 3: REPORTE
-            is_sucursal = fields.get('Tipo') == "Actividad en Sucursal"
-            t_sec3 = "3. Reporte y Lista" if is_sucursal else "3. Reporte Firmado"
-            st.markdown(f"#### {t_sec3}")
-            c_rep, c_list = st.columns(2)
+                col_row = st.columns(2); render_celda_auto(col_row[0], keys_act[i], keys_act[i], fields)
+                if i + 1 < len(keys_act): render_celda_auto(col_row[1], keys_act[i+1], keys_act[i+1], fields)
+            is_sucursal = fields.get('Tipo') == "Actividad en Sucursal"; t_sec3 = "3. Reporte y Lista" if is_sucursal else "3. Reporte Firmado"; st.markdown(f"#### {t_sec3}"); c_rep, c_list = st.columns(2)
             render_celda_auto(c_rep, "Reporte firmado", "Reporte Firmado", fields)
-            if is_sucursal:
-                render_celda_auto(c_list, "Lista de asistencia", "Lista de Asistencia", fields)
-            
+            if is_sucursal: render_celda_auto(c_list, "Lista de asistencia", "Lista de Asistencia", fields)
             st.divider()
-            if st.button("⬅️ REGRESAR A LISTADO DE EVENTOS (FINAL)", use_container_width=True, type="secondary"):
-                st.session_state.selected_event = None; st.rerun()
+            if st.button("⬅️ REGRESAR A LISTADO DE EVENTOS (FINAL)", use_container_width=True, type="secondary"): st.session_state.selected_event = None; st.rerun()
