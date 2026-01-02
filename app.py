@@ -39,7 +39,7 @@ SUCURSALES_OFICIALES = [
 
 FILES_DB = "usuarios.json"
 HISTORIAL_FILE = "historial_modificaciones.csv"
-YEAR_ACTUAL = 2025 # Año fijo
+YEAR_ACTUAL = 2025 
 
 # ==============================================================================
 # 2. FUNCIONES DE UTILIDAD
@@ -47,20 +47,17 @@ YEAR_ACTUAL = 2025 # Año fijo
 
 def limpiar_clave(texto):
     """
-    Convierte 'Valla Móvil con Volanteo' en 'vallamovilconvolanteo'.
-    Elimina acentos, espacios y caracteres especiales para asegurar coincidencia.
+    Convierte texto a una 'clave' simple para comparar.
+    Ej: 'Valla Móvil' -> 'vallamovil'
     """
     if not isinstance(texto, str): return str(texto).lower()
-    
-    # 1. Normalizar unicode (separar acentos)
+    # 1. Quitar acentos
     texto = unicodedata.normalize('NFD', texto)
-    # 2. Filtrar solo caracteres ASCII (quita acentos)
     texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
-    # 3. Pasar a minúsculas
+    # 2. Minúsculas
     texto = texto.lower()
-    # 4. Eliminar todo lo que no sea letra o número (incluyendo espacios)
+    # 3. Quitar espacios y símbolos, dejar solo letras y números
     texto = re.sub(r'[^a-z0-9]', '', texto)
-    
     return texto
 
 def formatear_fecha_larga(fecha_str):
@@ -74,53 +71,42 @@ def formatear_fecha_larga(fecha_str):
 
 def get_imagen_plantilla(tipo_evento):
     """
-    Busca coincidencias en la carpeta assets usando 'limpiar_clave'.
+    Busca coincidencias en la carpeta assets.
     """
-    carpeta_assets = "assets"
+    carpeta_assets = "assets" # IMPORTANTE: Debe existir esta carpeta junto a app.py
     url_default = "https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png"
 
     if not tipo_evento: tipo_evento = "default"
 
-    # Verificar existencia de carpeta
+    # Verificar si existe la carpeta assets
     if not os.path.exists(carpeta_assets):
-        # Si estás en local, asegúrate de crear la carpeta 'assets' junto al script
         return url_default
 
-    # Clave limpia del evento (ej: "vallamovil")
     clave_buscada = limpiar_clave(str(tipo_evento))
 
     try:
         archivos = os.listdir(carpeta_assets)
         
-        # 1. Búsqueda exacta (limpiando nombres)
-        for archivo in archivos:
-            nombre_base = os.path.splitext(archivo)[0] # Quita .png
-            clave_archivo = limpiar_clave(nombre_base)
-            
-            if clave_buscada == clave_archivo:
-                return os.path.join(carpeta_assets, archivo)
-        
-        # 2. Búsqueda parcial (si la clave está contenida en el archivo o viceversa)
+        # Búsqueda exacta (limpiando nombres)
         for archivo in archivos:
             nombre_base = os.path.splitext(archivo)[0]
             clave_archivo = limpiar_clave(nombre_base)
             
-            # Ejemplo: TIPO="Valla" y archivo="Valla Movil.png" (Intento de fallback)
-            if clave_buscada in clave_archivo:
-                 return os.path.join(carpeta_assets, archivo)
-
-        # 3. Fallback a imagen por defecto local
+            # Comparamos vallamovil == vallamovil
+            if clave_buscada == clave_archivo:
+                return os.path.join(carpeta_assets, archivo)
+        
+        # Fallback a imagen default local si existe
         for archivo in archivos:
             if "default" in limpiar_clave(archivo):
                 return os.path.join(carpeta_assets, archivo)
 
-    except Exception as e:
-        print(f"Error assets: {e}")
+    except Exception:
+        pass
 
     return url_default
 
 def normalizar_texto_simple(texto):
-    """Para comparar Sucursales (mantiene espacios)"""
     if not isinstance(texto, str): return str(texto).lower()
     texto = unicodedata.normalize('NFD', texto)
     return ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower()
@@ -175,7 +161,6 @@ def get_records(base_id, table_id, year, plaza):
     except: return []
 
     filtered = []
-    # Usamos la normalización simple para Sucursales (respeta espacios para evitar errores de lectura)
     plaza_norm = normalizar_texto_simple(plaza)
     
     for rec in data:
@@ -265,6 +250,23 @@ else:
             st.session_state.current_base_id = base_id
             st.session_state.current_table_id = table_id
             st.session_state.current_plaza_view = sel_plaza
+        
+        st.divider()
+
+        # --- DIAGNÓSTICO DE IMÁGENES (SOLO PARA ADMIN) ---
+        if st.session_state.user_role == "admin":
+            with st.expander("🔧 Diagnóstico de Imágenes"):
+                st.write(f"Directorio Actual: `{os.getcwd()}`")
+                path_assets = os.path.join(os.getcwd(), "assets")
+                if os.path.exists(path_assets):
+                    st.success("✅ Carpeta 'assets' encontrada.")
+                    archivos = os.listdir(path_assets)
+                    st.write("Archivos detectados:")
+                    for a in archivos:
+                        st.code(f"{a} -> Clave: {limpiar_clave(os.path.splitext(a)[0])}")
+                else:
+                    st.error("❌ NO se encuentra la carpeta 'assets'.")
+                    st.info("Crea una carpeta llamada 'assets' junto a este script y mete las fotos ahí.")
 
         st.divider()
         if st.button("Cerrar Sesión"):
@@ -308,9 +310,10 @@ else:
                         with st.expander(f"{f.get('Fecha')} - {f.get('Tipo', 'Evento')}", expanded=True):
                             col_img, col_data = st.columns([1, 2.5])
                             with col_img:
-                                # Aquí obtenemos la imagen con la nueva lógica de limpieza
                                 img_path = get_imagen_plantilla(f.get('Tipo'))
                                 st.image(img_path, use_container_width=True)
+                                # Debug visual para ver qué intenta cargar
+                                # st.caption(f"Ruta: {img_path}") 
                             with col_data:
                                 fecha_larga = formatear_fecha_larga(f.get('Fecha'))
                                 st.markdown(f"### 🗓️ {fecha_larga}")
@@ -324,10 +327,8 @@ else:
                                     if st.button("⚠️ EVENTO REAGENDADO", key=f"re_{r['id']}", use_container_width=True):
                                         st.warning("Pendiente de conectar.")
                 else: 
-                    if st.session_state.get('sucursal_actual'):
-                        st.info("No hay eventos.")
-                    else:
-                        st.warning("Selecciona una plaza.")
+                    if st.session_state.get('sucursal_actual'): st.info("No hay eventos.")
+                    else: st.warning("Selecciona una plaza.")
             else: st.info("👈 Presiona Actualizar Eventos.")
 
         # VISTA B: CARGAR EVIDENCIA
