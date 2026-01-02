@@ -36,6 +36,7 @@ st.markdown("""
         .logo-light { display: none !important; }
         .logo-dark { display: block !important; }
     }
+
     /* ESTILOS GENERALES */
     .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
     .streamlit-expanderContent { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #333333 !important; border-top: none !important; }
@@ -46,23 +47,37 @@ st.markdown("""
     .stButton button[kind="primary"] p { color: #ffffff !important; }
     .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
     
-    /* --- ESTILO BOTÓN (+) CARGA DE ARCHIVO --- */
-    /* Color Celeste Brillante (#40E0D0) aplicado al borde y al icono */
+    /* --- ESTILO UPLOADER MINIMALISTA (SOLO + CELESTE) --- */
     [data-testid="stFileUploader"] section { 
         min-height: 0px !important; 
-        padding: 10px !important; 
-        border: 2px dashed #40E0D0 !important; /* Borde Celeste Brillante */
-        background-color: rgba(64, 224, 208, 0.05) !important; /* Fondo muuuuy sutil para dar cuerpo sin saturar */
+        padding: 15px !important; 
+        border: 2px dashed #40E0D0 !important; /* Borde Celeste */
+        background-color: rgba(64, 224, 208, 0.05) !important; 
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
+    
+    /* Ocultar TODO el contenido interno por defecto (Botón Browse, textos, limites) */
+    [data-testid="stFileUploader"] section > div {
+        display: none !important;
+    }
+    [data-testid="stFileUploader"] section button {
+        display: none !important;
+    }
+    [data-testid="stFileUploader"] section span, 
+    [data-testid="stFileUploader"] section small, 
+    [data-testid="stFileUploader"] section p {
+        display: none !important;
+    }
+
+    /* Agregar ÚNICAMENTE el emoji (+) */
     [data-testid="stFileUploader"] section::after { 
         content: "➕"; 
-        font-size: 32px; 
-        color: #40E0D0 !important; /* Icono Celeste Brillante */
+        font-size: 28px; 
+        color: #40E0D0 !important; /* Celeste */
         display: block; 
-        text-align: center;
-    }
-    [data-testid="stFileUploader"] [data-testid="stMarkdownContainer"] p {
-        display: none; /* Ocultar texto "Drag and drop file here" para dejarlo limpio */
+        visibility: visible !important;
     }
 
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
@@ -90,7 +105,6 @@ BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd"
 HISTORY_TABLE_ID = "tblmy6hL3VXQM5883"
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
-# YEAR_ACTUAL ELIMINADO PARA QUE NO FILTRE POR AÑO
 
 cloudinary.config(
     cloud_name=CLOUDINARY_CONFIG["cloud_name"],
@@ -207,7 +221,6 @@ def registrar_historial(accion, detalles):
     
     data = {"fields": {"Fecha": fecha, "Usuario": usuario, "Rol": rol, "Sucursal": sucursal, "Accion": accion, "Detalles": detalles}}
     res = requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
-    # if res.status_code != 200: st.toast(f"Error historial: {res.text}", icon="⚠️") # Silent fail mejor
 
 def get_full_history():
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}?sort%5B0%5D%5Bfield%5D=Fecha&sort%5B0%5D%5Bdirection%5D=desc")
@@ -222,15 +235,12 @@ def api_get_all_tables(base_id):
     r = airtable_request("GET", f"https://api.airtable.com/v0/meta/bases/{base_id}/tables")
     return {t['name']: t['id'] for t in r.json().get('tables', [])} if r and r.status_code==200 else {}
 
-# --- MODIFICADO: YA NO FILTRA POR AÑO, SOLO POR PLAZA ---
 def get_records(base_id, table_id, plaza):
     r = airtable_request("GET", f"https://api.airtable.com/v0/{base_id}/{table_id}")
     if not r or r.status_code != 200: return []
     filtered = []; plaza_norm = normalizar_texto_simple(plaza)
     for rec in r.json().get('records', []):
         f = rec.get('fields', {})
-        # Eliminado el if f.get('Fecha').startswith(year)
-        # Ahora confiamos en que la tabla seleccionada tiene los datos correctos
         p_val = f.get('Sucursal')
         p_str = p_val[0] if isinstance(p_val, list) else str(p_val)
         if normalizar_texto_simple(p_str) == plaza_norm: filtered.append(rec)
@@ -414,7 +424,6 @@ else:
         if (bid!=st.session_state.get('current_base_id') or tid!=st.session_state.get('current_table_id') or spl!=st.session_state.get('current_plaza_view') or 'search_results' not in st.session_state):
             with st.spinner("🔄 Cargando..."):
                 st.session_state.selected_event=None; st.session_state.rescheduling_event=None
-                # --- MODIFICADO: LLAMADA SIN AÑO ---
                 st.session_state.search_results=get_records(bid, tid, spl)
                 st.session_state.current_base_id=bid; st.session_state.current_table_id=tid; st.session_state.current_plaza_view=spl
 
@@ -440,7 +449,6 @@ else:
                 cu, cp = st.columns(2); nu=cu.text_input("User", sel if sel!="(Nuevo)" else ""); np=cp.text_input("Pass", d['password'])
                 nr=st.selectbox("Rol",["user","admin"],0 if d['role']=="user" else 1)
                 
-                # --- FIX: Validar que los defaults existan en las opciones ---
                 defaults_validos = [x for x in d['plazas'] if x in SUCURSALES_OFICIALES]
                 npl=st.multiselect("Plazas", SUCURSALES_OFICIALES, defaults_validos)
                 
@@ -581,14 +589,12 @@ else:
                 
                 if st.form_submit_button("Guardar", type="primary"):
                     new_reg = {"Fecha":nf.strftime("%Y-%m-%d"),"Hora":nh,"Tipo":nt,"Sucursal":f.get('Sucursal'),"Seccion":ns,"Ruta a seguir":nr,"Punto de reunion":np,"Municipio":f"{nm} (Evento Reagendado)","Cantidad":nc,"AM Responsable":nam,"Teléfono AM":ntam,"DM Responsable":ndm,"Teléfono DM":ntdm}
-                    # --- MODIFICADO: LLAMADA SIN AÑO ---
                     if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Hecho"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, st.session_state.current_plaza_view); st.rerun()
                     else: st.error("Error")
 
         # 3. CARGA EVIDENCIA
         else:
             evt = st.session_state.selected_event; f=evt['fields']
-            # --- MODIFICADO: LLAMADA SIN AÑO ---
             current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
             if current_record_fresh: f = current_record_fresh['fields']; evt = current_record_fresh
             
@@ -637,7 +643,9 @@ else:
                         else: st.caption("🔒")
 
             st.markdown("#### 1. Foto Inicio"); c1,c2 = st.columns(2); render_cell(c1, "Foto de equipo", "Foto Equipo")
-            st.markdown("#### 2. Actividad"); keys=["Foto 01","Foto 02","Foto 03","Foto 04","Foto 05","Foto 06","Foto 07"]
+            
+            # --- CAMBIO SOLICITADO: TÍTULO "Fotos de Actividad" ---
+            st.markdown("#### Fotos de Actividad"); keys=["Foto 01","Foto 02","Foto 03","Foto 04","Foto 05","Foto 06","Foto 07"]
             for i in range(0,len(keys),2):
                 cr=st.columns(2); render_cell(cr[0], keys[i], keys[i])
                 if i+1<len(keys): render_cell(cr[1], keys[i+1], keys[i+1])
