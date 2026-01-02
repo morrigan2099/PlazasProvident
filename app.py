@@ -53,12 +53,12 @@ CLOUDINARY_CONFIG = {
 }
 AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87ad1f2d71bfe853ce9783"
 
-# --- CONFIGURACIÓN BASE MAESTRA ---
+# --- ⚠️ CONFIGURACIÓN BASE MAESTRA ---
 ADMIN_BASE_ID = "appRF7jHcmBJZA1px"
 USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"
 CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"
 BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd" 
-HISTORY_TABLE_ID = "tblmy6hL3VXQM5883" # <--- ⚠️ REEMPLAZA CON EL ID DE LA TABLA 'Historial'
+HISTORY_TABLE_ID = "tblmy6hL3VXQM5883"  # <--- 🚨 PEGA AQUÍ EL ID DE LA TABLA HISTORIAL (tbl...)
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
@@ -156,14 +156,14 @@ def airtable_request(method, url, data=None, params=None):
 
 # --- AUDITORÍA / LOGS ---
 def registrar_historial(accion, detalles):
-    if "Historial" not in HISTORY_TABLE_ID and "tbl" not in HISTORY_TABLE_ID: 
-        return # Si no hay ID configurado, no hacer nada para no romper el flujo
+    # Si el usuario no ha puesto el ID correcto, saltamos el log para no dar error
+    if "tbl" not in HISTORY_TABLE_ID: return 
     
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}"
     usuario = st.session_state.get('user_name', 'Sistema')
     rol = st.session_state.get('user_role', '--')
     sucursal = st.session_state.get('sucursal_actual', 'N/A')
-    fecha = datetime.now().isoformat()
+    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # Formato texto para asegurar compatibilidad
     
     data = {
         "fields": {
@@ -175,10 +175,10 @@ def registrar_historial(accion, detalles):
             "Detalles": detalles
         }
     }
-    # Ejecutamos sin esperar respuesta crítica (fire and forget)
     requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
 
 def get_full_history():
+    if "tbl" not in HISTORY_TABLE_ID: return []
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}?sort%5B0%5D%5Bfield%5D=Fecha&sort%5B0%5D%5Bdirection%5D=desc")
     if r and r.status_code == 200:
         return [rec['fields'] for rec in r.json().get('records', [])]
@@ -443,12 +443,13 @@ else:
                 with st.spinner("Descargando logs..."):
                     logs = get_full_history()
                     if logs:
+                        # CREAR DATAFRAME ROBUSTO (Evita error si faltan columnas)
                         df_logs = pd.DataFrame(logs)
-                        # Ordenar columnas
-                        cols = ["Fecha", "Usuario", "Accion", "Sucursal", "Rol", "Detalles"]
-                        df_logs = df_logs[[c for c in cols if c in df_logs.columns]]
-                        st.dataframe(df_logs, use_container_width=True)
-                    else: st.info("No hay logs o error al cargar.")
+                        required_cols = ["Fecha", "Usuario", "Accion", "Sucursal", "Rol", "Detalles"]
+                        for c in required_cols:
+                            if c not in df_logs.columns: df_logs[c] = ""
+                        st.dataframe(df_logs[required_cols], use_container_width=True)
+                    else: st.info("No hay logs registrados.")
 
         main_area = tm
     else: main_area = st.container()
