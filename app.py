@@ -14,10 +14,59 @@ import re
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
+# --- CSS: ESTILO MINIMALISTA PARA EL UPLOADER ---
 st.markdown("""
 <style>
+    /* Ocultar sidebar y controles */
     [data-testid="stSidebar"] {display: none;}
     [data-testid="collapsedControl"] {display: none;}
+    
+    /* --- HACK PARA EL UPLOADER MINIMALISTA (CUADRO CON +) --- */
+    
+    /* 1. Ocultar el texto de "Limit 200MB" */
+    [data-testid="stFileUploader"] small {
+        display: none;
+    }
+    
+    /* 2. Ocultar el botón original y el texto "Drag and drop" */
+    [data-testid="stFileUploader"] button {
+        display: none;
+    }
+    [data-testid="stFileUploader"] section > div {
+        display: none; /* Oculta los textos internos */
+    }
+    
+    /* 3. Estilizar la caja para que sea un cuadro simple */
+    [data-testid="stFileUploader"] section {
+        min-height: 0px !important;
+        padding: 10px !important;
+        background-color: #f0f2f6; /* Gris claro */
+        border: 2px dashed #cccccc;
+        border-radius: 10px;
+        align-items: center;
+        justify-content: center;
+        display: flex;
+    }
+    
+    /* 4. Agregar el signo de MÁS (+) */
+    [data-testid="stFileUploader"] section::after {
+        content: "➕";  /* Emoji o carácter de más */
+        font-size: 30px;
+        color: #888;
+        visibility: visible;
+        display: block;
+    }
+
+    /* Efecto al pasar el mouse */
+    [data-testid="stFileUploader"] section:hover {
+        background-color: #e0e2e6;
+        border-color: #999;
+    }
+
+    /* Cuando ya hay archivo cargado (éxito) */
+    .uploaded-success {
+        border: 2px solid #28a745 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -262,80 +311,36 @@ else:
     if st.session_state.user_role == "admin":
         tab_main, tab_users, tab_config_db, tab_hist = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Configuración DB", "📜 Historial"])
         
-        # --- TAB USUARIOS (MEJORADO: CREAR / EDITAR) ---
+        # --- TAB USUARIOS ---
         with tab_users:
             users_db = cargar_usuarios()
             st.subheader("Gestión de Accesos")
-            
-            # 1. SELECTOR DE ACCIÓN
             opciones_usuarios = ["(Crear Nuevo)"] + list(users_db.keys())
             seleccion = st.selectbox("🔍 Seleccionar Usuario para Editar:", opciones_usuarios)
-            
-            # 2. DEFINIR VALORES POR DEFECTO SEGÚN SELECCIÓN
-            if seleccion == "(Crear Nuevo)":
-                val_user = ""
-                val_pass = ""
-                val_role = "user"
-                val_plazas = []
-                es_edicion = False
-            else:
-                data_u = users_db[seleccion]
-                val_user = seleccion
-                val_pass = data_u.get('password', '')
-                val_role = data_u.get('role', 'user')
-                val_plazas = data_u.get('plazas', [])
-                es_edicion = True
+            if seleccion == "(Crear Nuevo)": val_user = ""; val_pass = ""; val_role = "user"; val_plazas = []; es_edicion = False
+            else: data_u = users_db[seleccion]; val_user = seleccion; val_pass = data_u.get('password', ''); val_role = data_u.get('role', 'user'); val_plazas = data_u.get('plazas', []); es_edicion = True
 
-            # 3. FORMULARIO DINÁMICO
             with st.form("form_usuarios_admin"):
                 c1, c2 = st.columns(2)
-                # Input Usuario: Si es edición, permitimos cambiarlo (renombrar)
                 new_user = c1.text_input("Usuario (ID)", value=val_user)
-                new_pass = c2.text_input("Contraseña", value=val_pass) # type="password" opcional si quieres verla
-                
+                new_pass = c2.text_input("Contraseña", value=val_pass)
                 c3, c4 = st.columns(2)
                 new_role = c3.selectbox("Rol", ["user", "admin"], index=0 if val_role=="user" else 1)
                 new_plazas = c4.multiselect("Plazas Permitidas", SUCURSALES_OFICIALES, default=[p for p in val_plazas if p in SUCURSALES_OFICIALES])
-                
-                # BOTONES
                 st.markdown("<br>", unsafe_allow_html=True)
                 cols_btns = st.columns([1, 1, 4])
-                
                 submitted = cols_btns[0].form_submit_button("💾 Guardar Datos", type="primary")
-                
-                # Para eliminar, usamos checkbox dentro del form o botón fuera.
-                # Streamlit forms no soportan multiples botones submit con logica distinta facil.
-                # Usaremos logica post-submit.
-                
                 if submitted:
-                    if not new_user or not new_pass:
-                        st.error("Usuario y contraseña son obligatorios.")
+                    if not new_user or not new_pass: st.error("Usuario y contraseña obligatorios.")
                     else:
-                        # Si es edición y cambió el nombre, borramos el anterior
-                        if es_edicion and new_user != seleccion:
-                            del users_db[seleccion]
-                            st.info(f"Usuario renombrado: {seleccion} -> {new_user}")
-                        
-                        # Guardar/Actualizar
-                        users_db[new_user] = {
-                            "password": new_pass,
-                            "role": new_role,
-                            "plazas": new_plazas
-                        }
-                        guardar_usuarios(users_db)
-                        st.success(f"Usuario {new_user} guardado correctamente.")
-                        st.rerun()
+                        if es_edicion and new_user != seleccion: del users_db[seleccion]
+                        users_db[new_user] = {"password": new_pass, "role": new_role, "plazas": new_plazas}
+                        guardar_usuarios(users_db); st.success(f"Usuario {new_user} guardado."); st.rerun()
 
-            # BOTÓN DE ELIMINAR (FUERA DEL FORM PARA EVITAR CONFLICTOS)
             if es_edicion:
                 st.markdown("---")
-                col_del_1, col_del_2 = st.columns([1, 4])
-                if col_del_1.button("🗑️ Eliminar Usuario", type="secondary"):
-                    if seleccion in users_db:
-                        del users_db[seleccion]
-                        guardar_usuarios(users_db)
-                        st.warning(f"Usuario {seleccion} eliminado.")
-                        st.rerun()
+                if st.button("🗑️ Eliminar Usuario", type="secondary"):
+                    if seleccion in users_db: del users_db[seleccion]; guardar_usuarios(users_db); st.warning(f"Usuario eliminado."); st.rerun()
 
             st.markdown("---")
             st.markdown("#### Lista de Usuarios Activos")
@@ -411,26 +416,26 @@ else:
                     if ex: st.success("✅ Creado."); registrar_historial("Reagendar",st.session_state.user_name,nsu,f"Orig:{f_orig.get('Fecha')}->New:{nf}"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id,st.session_state.current_table_id,YEAR_ACTUAL,st.session_state.current_plaza_view); st.rerun()
                     else: st.error(f"Error: {rs}")
 
-        # 3. CARGA
+        # 3. CARGA EVIDENCIA
         else:
             evt = st.session_state.selected_event; fields = evt['fields']
             if st.button("⬅️ REGRESAR"): st.session_state.selected_event = None; st.rerun()
             st.markdown(f"### 📸 Cargar Evidencia: {fields.get('Tipo')}")
             with st.form("upload_form"):
                 uploads = {}
-                st.caption("1. Foto Equipo"); c1,c2=st.columns([3,1]); uploads['Foto de equipo']=c1.file_uploader("Eq",key="ue",label_visibility="collapsed")
+                st.caption("1. Foto Equipo"); c1,c2=st.columns([3,1]); uploads['Foto de equipo']=c1.file_uploader("Eq",key="ue",label_visibility="collapsed", type=['jpg','png','jpeg'])
                 if fields.get('Foto de equipo'): c2.image(fields['Foto de equipo'][0]['url'],width=80)
                 st.caption("2. Actividad"); g=[("Foto 01","Foto 02"),("Foto 03","Foto 04"),("Foto 05","Foto 06"),("Foto 07",None)]
                 for l1,l2 in g:
-                    ca,cb=st.columns(2); uploads[l1]=ca.file_uploader(l1,key=l1,label_visibility="collapsed")
+                    ca,cb=st.columns(2); uploads[l1]=ca.file_uploader(l1,key=l1,label_visibility="collapsed", type=['jpg','png','jpeg'])
                     if fields.get(l1): ca.image(fields[l1][0]['url'],width=80)
                     if l2:
-                        uploads[l2]=cb.file_uploader(l2,key=l2,label_visibility="collapsed")
+                        uploads[l2]=cb.file_uploader(l2,key=l2,label_visibility="collapsed", type=['jpg','png','jpeg'])
                         if fields.get(l2): cb.image(fields[l2][0]['url'],width=80)
-                st.caption("3. Reporte"); c3,c4=st.columns([3,1]); uploads['Reporte firmado']=c3.file_uploader("Rep",key="ur",label_visibility="collapsed")
+                st.caption("3. Reporte"); c3,c4=st.columns([3,1]); uploads['Reporte firmado']=c3.file_uploader("Rep",key="ur",label_visibility="collapsed", type=['jpg','png','jpeg'])
                 if fields.get('Reporte firmado'): c4.image(fields['Reporte firmado'][0]['url'],width=80)
                 if fields.get('Tipo') == "Actividad en Sucursal":
-                    st.caption("4. Lista"); c5,c6=st.columns([3,1]); uploads['Lista de asistencia']=c5.file_uploader("Lis",key="ul",label_visibility="collapsed")
+                    st.caption("4. Lista"); c5,c6=st.columns([3,1]); uploads['Lista de asistencia']=c5.file_uploader("Lis",key="ul",label_visibility="collapsed", type=['jpg','png','jpeg'])
                     if fields.get('Lista de asistencia'): c6.image(fields['Lista de asistencia'][0]['url'],width=80)
                 if st.form_submit_button("💾 GUARDAR", type="primary", use_container_width=True):
                     files={k:v for k,v in uploads.items() if v}; pr=st.progress(0); ud={}; tot=len(files)
