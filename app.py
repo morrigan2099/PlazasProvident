@@ -282,7 +282,6 @@ else:
         if 'current_plaza_view' in st.session_state:
             st.markdown(f"### 📋 Eventos en {st.session_state.current_plaza_view} ({YEAR_ACTUAL})")
 
-        # --- LÓGICA DE VISTAS ---
         # 1. LISTADO (Default)
         if st.session_state.selected_event is None and st.session_state.rescheduling_event is None:
             if 'search_results' in st.session_state:
@@ -326,52 +325,66 @@ else:
                     else: st.warning("Carga eventos primero.")
             else: st.info("👆 Cargar eventos.")
 
-        # 2. VISTA REAGENDAR (MODIFICADA: COPIA TODO)
+        # 2. VISTA REAGENDAR (MODIFICADA CON CAMPOS EXTRA)
         elif st.session_state.rescheduling_event is not None:
             evt = st.session_state.rescheduling_event
             f_orig = evt['fields']
             
-            if st.button("⬅️ CANCELAR"):
+            if st.button("⬅️ CANCELAR REAGENDADO"):
                 st.session_state.rescheduling_event = None
                 st.rerun()
             
             st.markdown("### ⚠️ Reagendar Evento")
-            st.info("Todos los datos originales se conservarán, excepto los modificados abajo.")
+            st.info("Modifica solo lo necesario. Los datos no mostrados aquí se copiarán del original.")
             
             with st.form("reschedule_form"):
-                c1, c2 = st.columns(2)
+                # Usamos 3 columnas para organizar mejor la cantidad de campos
+                c1, c2, c3 = st.columns(3)
                 
-                # Valores actuales
+                # Valores actuales Fecha
                 try: 
                     fecha_obj = datetime.strptime(f_orig.get('Fecha', datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d")
                 except: 
                     fecha_obj = datetime.now()
                 
-                # Inputs editables
-                new_fecha = c1.date_input("Fecha", value=fecha_obj)
-                new_hora = c2.text_input("Hora", value=f_orig.get('Hora', '09:00'))
-                new_tipo = st.text_input("Tipo", value=f_orig.get('Tipo', ''))
-                new_suc = st.text_input("Sucursal", value=f_orig.get('Sucursal', st.session_state.sucursal_actual))
-                new_seccion = st.text_input("Sección", value=f_orig.get('Seccion', ''))
-                new_ruta = st.text_input("Ruta a seguir", value=f_orig.get('Ruta a seguir', ''))
-                new_punto = st.text_input("Punto de reunión", value=f_orig.get('Punto de reunion', ''))
-                new_muni = st.text_input("Municipio", value=f_orig.get('Municipio', ''))
+                # --- COLUMNA 1: DETALLES GENERALES ---
+                with c1:
+                    new_fecha = st.date_input("Fecha", value=fecha_obj)
+                    new_tipo = st.text_input("Tipo", value=f_orig.get('Tipo', ''))
+                    new_seccion = st.text_input("Sección", value=f_orig.get('Seccion', ''))
+                    new_am = st.text_input("AM Responsable", value=f_orig.get('AM Responsable', ''))
+                    new_dm = st.text_input("DM Responsable", value=f_orig.get('DM Responsable', ''))
+
+                # --- COLUMNA 2: UBICACIÓN Y LOGÍSTICA ---
+                with c2:
+                    new_hora = st.text_input("Hora", value=f_orig.get('Hora', '09:00'))
+                    new_suc = st.text_input("Sucursal", value=f_orig.get('Sucursal', st.session_state.sucursal_actual))
+                    new_ruta = st.text_input("Ruta a seguir", value=f_orig.get('Ruta a seguir', ''))
+                    new_tel_am = st.text_input("Teléfono AM", value=f_orig.get('Teléfono AM', ''))
+                    new_tel_dm = st.text_input("Teléfono DM", value=f_orig.get('Teléfono DM', ''))
+
+                # --- COLUMNA 3: DETALLES FINALES ---
+                with c3:
+                    new_muni = st.text_input("Municipio", value=f_orig.get('Municipio', ''))
+                    new_punto = st.text_input("Punto de reunión", value=f_orig.get('Punto de reunion', ''))
+                    # Cantidad (No visualizable en tarjeta, pero editable aquí)
+                    # Tratamos como texto o numero según venga en Airtable, default texto para no fallar
+                    new_cant = st.text_input("Cantidad", value=f_orig.get('Cantidad', ''))
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
-                    # 1. COPIAR TODO EL DICCIONARIO ORIGINAL
+                if st.form_submit_button("💾 GUARDAR NUEVA FECHA", type="primary", use_container_width=True):
+                    # 1. COPIAR TODO EL DICCIONARIO ORIGINAL (Para no perder datos extra)
                     nuevo_registro = f_orig.copy()
                     
-                    # 2. ELIMINAR CAMPOS QUE NO DEBEN IR (Attachments viejos)
-                    # Aunque "todos" se copian, las fotos viejas no deberían ir en un reagendado
-                    # Si insistes en copiar INCLUSO las fotos, comenta estas lineas:
+                    # 2. ELIMINAR CAMPOS QUE NO DEBEN IR (Attachments viejos y metadatos)
                     keys_to_remove = ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", 
-                                      "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia", "Created"]
+                                      "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia", 
+                                      "Created", "Modified", "Record ID"]
                     for k in keys_to_remove:
                         if k in nuevo_registro: del nuevo_registro[k]
 
-                    # 3. ACTUALIZAR SOLO LOS CAMPOS CLAVE
+                    # 3. ACTUALIZAR CON LOS DATOS DEL FORMULARIO
                     nuevo_registro.update({
                         "Fecha": new_fecha.strftime("%Y-%m-%d"),
                         "Hora": new_hora,
@@ -380,10 +393,15 @@ else:
                         "Seccion": new_seccion,
                         "Ruta a seguir": new_ruta,
                         "Punto de reunion": new_punto,
-                        "Municipio": f"{new_muni} (Evento Reagendado)"
+                        "Municipio": f"{new_muni} (Evento Reagendado)",
+                        "Cantidad": new_cant,
+                        "AM Responsable": new_am,
+                        "Teléfono AM": new_tel_am,
+                        "DM Responsable": new_dm,
+                        "Teléfono DM": new_tel_dm
                     })
                     
-                    # 4. ENVIAR
+                    # 4. ENVIAR A AIRTABLE
                     exito, resp = create_new_event(
                         st.session_state.current_base_id,
                         st.session_state.current_table_id,
@@ -391,13 +409,14 @@ else:
                     )
                     
                     if exito:
-                        st.success("✅ Reagendado creado.")
-                        registrar_historial("Reagendar", st.session_state.user_name, new_suc, f"Origen: {f_orig.get('Fecha')}")
+                        st.success("✅ Reagendado creado correctamente.")
+                        registrar_historial("Reagendar", st.session_state.user_name, new_suc, f"Original: {f_orig.get('Fecha')} -> Nueva: {new_fecha}")
                         st.session_state.rescheduling_event = None
+                        # Recargar lista
                         st.session_state.search_results = get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view)
                         st.rerun()
                     else:
-                        st.error(f"Error: {resp}")
+                        st.error(f"Error al crear: {resp}")
 
         # 3. VISTA CARGA (Original)
         else:
