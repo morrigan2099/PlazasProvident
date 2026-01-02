@@ -24,11 +24,21 @@ st.markdown("""
         /* Streamlit maneja el fondo */
     }
 
-    /* --- 2. LOGOTIPO DINÁMICO --- */
-    .logo-light { display: block; }
-    .logo-dark { display: none; }
-    [data-theme="dark"] .logo-light { display: none !important; }
-    [data-theme="dark"] .logo-dark { display: block !important; }
+    /* --- 2. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
+    
+    /* Por defecto (Modo Claro): Muestra DARKLOGO (para contraste), Oculta LIGHTLOGO */
+    .logo-light { display: none; }
+    .logo-dark { display: block; }
+
+    /* Si el SISTEMA OPERATIVO está en Oscuro -> Muestra LIGHTLOGO */
+    @media (prefers-color-scheme: dark) {
+        .logo-light { display: block !important; }
+        .logo-dark { display: none !important; }
+    }
+
+    /* Si STREAMLIT está en Oscuro -> Muestra LIGHTLOGO */
+    [data-theme="dark"] .logo-light { display: block !important; }
+    [data-theme="dark"] .logo-dark { display: none !important; }
 
     /* --- 3. EXPANDERS (FONDO NEGRO / TEXTO BLANCO) --- */
     .streamlit-expanderHeader {
@@ -160,18 +170,24 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
+# --- LOGO DINÁMICO (BASE64) ---
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
 
 def render_logo_dinamico(is_banner=False):
-    light_path = os.path.join("assets", "lightlogo.png")
-    dark_path = os.path.join("assets", "darklogo.png")
+    light_path = os.path.join("assets", "lightlogo.png") # Logo claro (para fondo oscuro)
+    dark_path = os.path.join("assets", "darklogo.png")   # Logo oscuro (para fondo claro)
+    
     width_css = "width: 100%;" if is_banner else "width: 150px; max-width: 100%;"
     
     if os.path.exists(light_path) and os.path.exists(dark_path):
         b64_light = get_base64_image(light_path)
         b64_dark = get_base64_image(dark_path)
+        
+        # HTML CON CLASES PARA SWITCH CSS
+        # .logo-light = lightlogo.png (Para Dark Mode)
+        # .logo-dark  = darklogo.png  (Para Light Mode)
         html = f"""
         <div style="text-align: center;">
             <img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}">
@@ -213,25 +229,21 @@ def check_evidencia_completa(fields):
 
 # --- METADATA (PARA OBTENER LISTAS DE BASES Y TABLAS REALES) ---
 def api_get_all_bases():
-    """Consulta la API de Metadatos para listar todas las bases de la cuenta"""
     url = "https://api.airtable.com/v0/meta/bases"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
-            # Devuelve diccionario {Nombre: ID}
             return {b['name']: b['id'] for b in r.json().get('bases', [])}
     except: pass
     return {}
 
 def api_get_all_tables(base_id):
-    """Consulta la API de Metadatos para listar tablas de una base específica"""
     url = f"https://api.airtable.com/v0/meta/bases/{base_id}/tables"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
-            # Devuelve diccionario {Nombre: ID}
             return {t['name']: t['id'] for t in r.json().get('tables', [])}
     except: pass
     return {}
@@ -296,7 +308,6 @@ def cargar_config_airtable():
 def guardar_config_airtable(base_name, base_id, table_name, table_id):
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
-    # Guardamos siempre activo
     fields = {"Nombre_Base": base_name, "ID_Base": base_id, "Nombre_Tabla": table_name, "ID_Tabla": table_id, "Activo": True}
     requests.post(url, json={"fields": fields}, headers=headers)
 
@@ -412,7 +423,7 @@ else:
     if base_id and table_id and sel_plaza:
         if (base_id != st.session_state.get('current_base_id') or 
             table_id != st.session_state.get('current_table_id') or 
-            sel_plaza != st.session_state.get('current_plaza_view')):
+            sel_plaza != st.session_state.get('current_plaza_view') or 'search_results' not in st.session_state):
             with st.spinner("🔄 Cargando..."):
                 st.session_state.selected_event = None; st.session_state.rescheduling_event = None
                 st.session_state.search_results = get_records(base_id, table_id, YEAR_ACTUAL, sel_plaza)
@@ -442,29 +453,24 @@ else:
             st.subheader("Agregar Configuración de Visibilidad")
             st.info("El sistema consultará tus Bases reales en Airtable.")
             
-            # 1. Obtener bases reales
             with st.spinner("Obteniendo Bases de Airtable..."):
                 real_bases = api_get_all_bases()
             
             if not real_bases:
                 st.error("No se pudieron obtener bases. Revisa tu Token.")
             else:
-                # 2. Selección de Base
                 selected_base_name = st.selectbox("Selecciona la Base:", list(real_bases.keys()))
                 selected_base_id = real_bases[selected_base_name]
                 
-                # 3. Obtener tablas reales de esa base
                 with st.spinner(f"Obteniendo tablas de {selected_base_name}..."):
                     real_tables = api_get_all_tables(selected_base_id)
                 
                 if not real_tables:
                     st.warning("Esta base no tiene tablas o no se pudieron leer.")
                 else:
-                    # 4. Selección Múltiple de Tablas
                     st.markdown(f"**Tablas disponibles en {selected_base_name}:**")
                     selected_tables_names = st.multiselect("Selecciona las tablas (Meses) a habilitar:", list(real_tables.keys()))
                     
-                    # 5. Botón de Guardar (Acción única)
                     if st.button("💾 GUARDAR CONFIGURACIÓN", type="primary"):
                         if selected_tables_names:
                             count = 0
@@ -474,11 +480,9 @@ else:
                                 guardar_config_airtable(selected_base_name, selected_base_id, t_name, t_id)
                                 count += 1
                                 progress_text.text(f"Guardando {t_name}...")
-                            
                             st.success(f"✅ Se agregaron {count} tablas a la configuración exitosamente.")
                             st.rerun()
-                        else:
-                            st.warning("Selecciona al menos una tabla.")
+                        else: st.warning("Selecciona al menos una tabla.")
             
             st.divider()
             st.markdown("#### Configuración Actual Guardada:")
