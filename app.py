@@ -12,119 +12,112 @@ from PIL import Image
 import io
 
 # ==============================================================================
-# 1. CONFIGURACIÓN Y ESTILOS (CSS REDISEÑADO)
+# 1. CONFIGURACIÓN Y ESTILOS (TEMA CLARO FORZADO)
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* Ocultar elementos nativos */
+    /* --- 1. FORZAR TEMA CLARO (LIGHT MODE) --- */
+    /* Fondo General */
+    [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+    /* Header (Barra superior) */
+    [data-testid="stHeader"] {
+        background-color: #ffffff !important;
+    }
+    /* Sidebar (aunque esté oculta, por si acaso) */
+    [data-testid="stSidebar"] {
+        background-color: #f0f2f6 !important;
+    }
+    /* Textos generales */
+    p, h1, h2, h3, h4, h5, h6, li, span, div {
+        color: #000000 !important;
+    }
+    /* Inputs (Cajas de texto) */
+    .stTextInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border-color: #d1d5db !important;
+    }
+    
+    /* --- 2. OCULTAR ELEMENTOS NATIVOS --- */
     [data-testid="stSidebar"] {display: none;}
     [data-testid="collapsedControl"] {display: none;}
     [data-testid="stFileUploader"] small {display: none;}
     [data-testid="stFileUploader"] button {display: none;}
     [data-testid="stFileUploader"] section > div {display: none;}
 
-    /* --- VARIABLES DE COLOR TEMA --- */
-    :root {
-        --bright-green: #00c853; /* Verde Esmeralda Brillante */
-        --bright-cyan: #00b0ff;  /* Celeste Brillante */
-        --danger-red: #dc2626;   /* Rojo Fuerte */
-    }
-
-    /* --- 1. ESTILOS DE BOTONES --- */
+    /* --- 3. BOTONES SÓLIDOS (NO DEGRADADOS) --- */
     
-    /* Botones PRIMARIOS (Ingresar, Guardar, Cargar) - Gradiente Verde/Celeste */
+    /* Botón PRIMARIO (Verde Sólido - Acción Positiva) */
     .stButton button[kind="primary"] {
-        background: linear-gradient(135deg, var(--bright-green), var(--bright-cyan)) !important;
+        background-color: #00c853 !important; /* Verde Brillante Sólido */
+        background-image: none !important;
         border: none !important;
         color: white !important;
         font-weight: 700 !important;
-        letter-spacing: 0.5px;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
     }
     .stButton button[kind="primary"]:hover {
-        opacity: 0.95 !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 12px rgba(0, 200, 83, 0.3) !important;
-    }
-    .stButton button[kind="primary"]:active {
-        transform: translateY(0px) !important;
+        background-color: #009624 !important; /* Verde más oscuro al pasar mouse */
+        transform: translateY(-1px);
     }
 
-    /* Botones SECUNDARIOS (ELIMINAR) - Rojo Sólido Fondo, Texto Blanco */
+    /* Botón SECUNDARIO (Rojo Sólido - Eliminar) */
     .stButton button[kind="secondary"] {
-        background-color: var(--danger-red) !important;
+        background-color: #dc2626 !important; /* Rojo Sólido */
         color: white !important;
         border: none !important;
-        font-weight: 600 !important;
-        transition: all 0.2s ease !important;
     }
     .stButton button[kind="secondary"]:hover {
-        background-color: #b91c1c !important; /* Rojo más oscuro */
-        box-shadow: 0 4px 6px rgba(220, 38, 38, 0.3) !important;
+        background-color: #b91c1c !important;
     }
-    
-    /* --- 2. ESTILOS DEL UPLOADER (+) --- */
+
+    /* Botón NEUTRO (Regresar - Gris/Azul) */
+    /* Streamlit a veces usa secondary para botones normales, forzamos estilo si no es rojo */
+    /* (Se maneja por defecto, pero podemos forzar un borde azul si se desea) */
+
+    /* --- 4. UPLOADER CON ACENTOS AZULES --- */
     [data-testid="stFileUploader"] section {
         min-height: 0px !important;
-        padding: 15px !important;
-        background-color: #f8f9fa;
-        border: 3px dashed #cbd5e0; /* Borde un poco más grueso */
+        padding: 10px !important;
+        background-color: #f8f9fa !important;
+        border: 2px dashed #90cdf4 !important; /* Borde azul suave */
         border-radius: 12px;
         align-items: center;
         justify-content: center;
         display: flex;
         cursor: pointer;
-        transition: all 0.3s ease;
     }
     
-    /* Signo de MÁS (+) */
     [data-testid="stFileUploader"] section::after {
         content: "➕";
         font-size: 32px;
-        color: #718096;
+        color: #00b0ff; /* Azul Celeste Brillante */
         visibility: visible;
         display: block;
-        transition: color 0.3s ease;
     }
 
-    /* Hover del Uploader (Usa el color Celeste brillante) */
     [data-testid="stFileUploader"] section:hover {
-        background-color: #e1f5fe !important; /* Fondo azul muy claro */
-        border-color: var(--bright-cyan) !important;
-        transform: scale(1.02);
-    }
-    [data-testid="stFileUploader"] section:hover::after {
-        color: var(--bright-cyan) !important;
+        background-color: #e0f7fa !important; /* Fondo cyan muy claro */
+        border-color: #00b0ff !important; /* Borde Celeste Brillante */
     }
 
-    /* --- 3. OTROS ELEMENTOS DEL TEMA --- */
-    
-    /* Inputs y Selects al hacer foco (Borde Celeste) */
-    div[data-baseweb="input"] :focus-within, 
-    div[data-baseweb="select"] :focus-within,
-    div[data-baseweb="base-input"] :focus-within {
-        border-color: var(--bright-cyan) !important;
-        box-shadow: 0 0 0 3px rgba(0, 176, 255, 0.2) !important;
+    /* --- 5. LOGO RESPONSIVO --- */
+    /* Asegura que las imágenes con use_container_width llenen todo */
+    img {
+        max-width: 100%;
     }
 
-    /* Spinners de carga (Celeste) */
-    .stSpinner > div {
-        border-top-color: var(--bright-cyan) !important;
-    }
-    
-    /* Barras de progreso (Verde) */
-    .stProgress > div > div > div {
-        background-color: var(--bright-green) !important;
-    }
-
-    /* Títulos de las fotos */
+    /* Títulos de fotos */
     .caption-text {
         font-size: 1.1rem !important;
         font-weight: 700 !important;
-        color: #1f2937;
+        color: #1f2937 !important;
         margin-bottom: 0.5rem;
     }
 </style>
@@ -152,7 +145,7 @@ cloudinary.config(
 )
 
 # ==============================================================================
-# 2. FUNCIONES DE UTILIDAD Y COMPRESIÓN
+# 2. FUNCIONES
 # ==============================================================================
 def limpiar_clave(texto):
     if not isinstance(texto, str): return str(texto).lower()
@@ -189,19 +182,11 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
-# --- FUNCIÓN LOGO ACTUALIZADA (BANNER) ---
 def render_logo(is_banner=False):
-    """
-    Si is_banner=True, usa use_container_width para llenar el ancho.
-    Si is_banner=False (ej. en header), usa un ancho fijo pequeño.
-    """
     path_logo = os.path.join("assets", "logo.png")
     if os.path.exists(path_logo):
-        if is_banner:
-            # ESTO HACE QUE SE VEA COMO BANNER DEL ANCHO DEL CONTENEDOR
-            st.image(path_logo, use_container_width=True) 
-        else:
-            st.image(path_logo, width=120)
+        # Si es banner (Login), usamos use_container_width=True para que llene el ancho del móvil
+        st.image(path_logo, use_container_width=True if is_banner else False, width=120 if not is_banner else None)
     else:
         st.markdown(f"## 🏦 **Provident**") 
 
@@ -350,17 +335,20 @@ if 'rescheduling_event' not in st.session_state: st.session_state.rescheduling_e
 # 5. LOGIN
 # ==============================================================================
 if not st.session_state.logged_in:
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    # Espaciado superior
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Renderizamos el Logo FULL WIDTH (Banner) fuera de columnas para móviles
+    render_logo(is_banner=True)
+    
+    # Contenedor centrado para el formulario (se ve bien en PC y móvil)
     col_izq, col_centro, col_der = st.columns([1, 2, 1])
     with col_centro:
-        # Llama a la función con is_banner=True para que ocupe todo el ancho
-        render_logo(is_banner=True)
-        
         st.markdown("### 🔐 Acceso al Sistema")
         with st.form("login_form"):
             usuario_input = st.text_input("👤 Usuario:")
             pass_input = st.text_input("🔑 Contraseña:", type="password")
-            if st.form_submit_button("Ingresar", use_container_width=True):
+            if st.form_submit_button("Ingresar", use_container_width=True, type="primary"):
                 users_db = cargar_usuarios()
                 user_data = users_db.get(usuario_input)
                 if user_data and user_data['password'] == pass_input:
@@ -379,9 +367,7 @@ else:
     # HEADER
     c_logo, c_user, c_logout = st.columns([1, 6, 1])
     with c_logo: 
-        # Logo pequeño en el header
-        render_logo(is_banner=False)
-        
+        render_logo(is_banner=False) # Logo pequeño en app interna
     with c_user: st.markdown(f"#### 👤 {st.session_state.user_name} | {st.session_state.user_role.upper()}")
     with c_logout:
         if st.button("Salir", use_container_width=True):
