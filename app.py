@@ -19,102 +19,56 @@ st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* --- 1. TEMA GENERAL --- */
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        /* Streamlit maneja el fondo */
-    }
-
-    /* --- 2. LOGOTIPO DINÁMICO (LÓGICA CORRECTA) --- */
+    /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
     
-    /* POR DEFECTO (Light Theme): Ocultar Light, Mostrar Dark */
-    .logo-light { display: none; }
-    .logo-dark { display: block; }
+    /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
+    /* Aquí mostramos el lightlogo.png y ocultamos el darklogo.png */
+    .logo-light { display: block; }
+    .logo-dark { display: none; }
 
-    /* MODO OSCURO (Dark Theme): Mostrar Light, Ocultar Dark */
+    /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
+    /* Aquí invertimos: Ocultamos light, Mostramos dark */
+    
+    /* Caso 1: Detectado por Sistema Operativo (Móvil) */
     @media (prefers-color-scheme: dark) {
-        .logo-light { display: block !important; }
-        .logo-dark { display: none !important; }
+        .logo-light { display: none !important; }
+        .logo-dark { display: block !important; }
     }
-    [data-theme="dark"] .logo-light { display: block !important; }
-    [data-theme="dark"] .logo-dark { display: none !important; }
 
-    /* --- 3. EXPANDERS (FONDO NEGRO / TEXTO BLANCO) --- */
-    .streamlit-expanderHeader {
-        background-color: #000000 !important;
-        color: #ffffff !important;
-        border: 1px solid #333333 !important;
-        border-radius: 8px !important;
-    }
-    .streamlit-expanderContent {
-        background-color: #1a1a1a !important;
-        color: #ffffff !important;
-        border: 1px solid #333333 !important;
-        border-top: none !important;
-    }
-    /* Forzar texto blanco dentro de expanders */
+    /* Caso 2: Detectado por Configuración de Streamlit */
+    [data-theme="dark"] .logo-light { display: none !important; }
+    [data-theme="dark"] .logo-dark { display: block !important; }
+
+
+    /* --- 2. RESTO DE ESTILOS (BOTONES, EXPANDERS, ETC) --- */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {}
+
+    /* Expanders Negros */
+    .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
+    .streamlit-expanderContent { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #333333 !important; border-top: none !important; }
     .streamlit-expanderHeader p, .streamlit-expanderHeader span, .streamlit-expanderHeader svg,
     .streamlit-expanderContent p, .streamlit-expanderContent span, .streamlit-expanderContent h1, 
-    .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent li, .streamlit-expanderContent label, 
-    .streamlit-expanderContent div {
-        color: #ffffff !important;
-        fill: #ffffff !important;
-    }
+    .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent li, .streamlit-expanderContent label { color: #ffffff !important; fill: #ffffff !important; }
 
-    /* --- 4. BOTONES --- */
-    /* Primario (Verde) */
-    .stButton button[kind="primary"] {
-        background-color: #00c853 !important;
-        border: none !important;
-        color: #ffffff !important;
-        font-weight: 700 !important;
-    }
+    /* Botones */
+    .stButton button[kind="primary"] { background-color: #00c853 !important; border: none !important; color: #ffffff !important; font-weight: 700 !important; }
     .stButton button[kind="primary"]:hover { background-color: #009624 !important; }
     .stButton button[kind="primary"] p { color: #ffffff !important; }
-
-    /* Secundario (Rojo) */
-    .stButton button[kind="secondary"] {
-        background-color: #dc2626 !important;
-        border: none !important;
-        color: #ffffff !important;
-        font-weight: 600 !important;
-    }
+    .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
     .stButton button[kind="secondary"]:hover { background-color: #b91c1c !important; }
     .stButton button[kind="secondary"] p { color: #ffffff !important; }
-
-    /* Botón Reagendar (Celeste) - Detectado por posición */
-    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button {
-        background-color: #00b0ff !important;
-        color: white !important;
-        border: none !important;
-    }
-    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button:hover {
-        background-color: #0091ea !important;
-    }
+    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button { background-color: #00b0ff !important; color: white !important; border: none !important; }
+    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button:hover { background-color: #0091ea !important; }
     [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button p { color: white !important; }
 
-    /* --- 5. UPLOADER --- */
+    /* Uploader */
     [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
-    [data-testid="stFileUploader"] section {
-        min-height: 0px !important;
-        padding: 10px !important;
-        background-color: transparent !important;
-        border: 2px dashed #00b0ff !important;
-        border-radius: 12px;
-        display: flex; align-items: center; justify-content: center; cursor: pointer;
-    }
-    [data-testid="stFileUploader"] section::after {
-        content: "➕"; font-size: 32px; color: #00b0ff !important; display: block;
-    }
+    [data-testid="stFileUploader"] section { min-height: 0px !important; padding: 10px !important; background-color: transparent !important; border: 2px dashed #00b0ff !important; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    [data-testid="stFileUploader"] section::after { content: "➕"; font-size: 32px; color: #00b0ff !important; display: block; }
 
-    /* --- 6. ELEMENTOS OCULTOS --- */
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
     img { max-width: 100%; }
     .caption-text { font-size: 1.1rem !important; font-weight: 700 !important; margin-bottom: 0.5rem; }
-    
-    /* Ajuste para eliminar espacio extra en markdown de detalles */
-    .element-container .stMarkdown p {
-        margin-bottom: 0px !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
