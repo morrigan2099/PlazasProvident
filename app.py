@@ -28,7 +28,7 @@ st.markdown("""
     
     [data-testid="stFileUploader"] section {
         min-height: 0px !important;
-        padding: 10px !important; /* Padding reducido */
+        padding: 10px !important;
         background-color: #f8f9fa;
         border: 2px dashed #a0aec0;
         border-radius: 12px;
@@ -40,13 +40,12 @@ st.markdown("""
     
     [data-testid="stFileUploader"] section::after {
         content: "➕";
-        font-size: 32px; /* Más grande */
+        font-size: 32px;
         color: #4a5568;
         visibility: visible;
         display: block;
     }
 
-    /* Botón Eliminar Rojo */
     .stButton button[kind="secondary"] {
         color: #e53e3e;
         border-color: #e53e3e;
@@ -57,7 +56,6 @@ st.markdown("""
         border-color: #c53030;
     }
 
-    /* TÍTULOS DE FOTOS MÁS GRANDES */
     .caption-text {
         font-size: 1.1rem !important;
         font-weight: 700 !important;
@@ -89,7 +87,7 @@ cloudinary.config(
 )
 
 # ==============================================================================
-# 2. FUNCIONES DE UTILIDAD Y COMPRESIÓN
+# 2. FUNCIONES DE UTILIDAD
 # ==============================================================================
 def limpiar_clave(texto):
     if not isinstance(texto, str): return str(texto).lower()
@@ -107,61 +105,46 @@ def formatear_fecha_larga(fecha_str):
     except: return fecha_str
 
 def obtener_ubicacion_corta(fields):
-    """Retorna la cadena más corta entre Punto, Ruta o Municipio"""
-    opciones = [
-        str(fields.get('Punto de reunion', '')),
-        str(fields.get('Ruta a seguir', '')),
-        str(fields.get('Municipio', ''))
-    ]
-    # Filtramos vacíos o 'None'
+    opciones = [str(fields.get('Punto de reunion', '')), str(fields.get('Ruta a seguir', '')), str(fields.get('Municipio', ''))]
     validas = [op for op in opciones if op and op.lower() != 'none' and len(op) > 2]
-    
     if not validas: return "Ubicación N/A"
-    # Retorna la más corta
     return min(validas, key=len)
 
 def comprimir_imagen_webp(archivo_upload):
-    """
-    Recibe un UploadedFile de Streamlit.
-    Retorna un BytesIO con la imagen comprimida en WebP.
-    """
     try:
-        # Abrir imagen con PIL
         image = Image.open(archivo_upload)
-        
-        # Convertir a RGB si es PNG con transparencia para evitar errores en JPG/WebP
-        if image.mode in ("RGBA", "P"):
-            image = image.convert("RGB")
-            
-        # Redimensionar si es muy grande (Max width 1920px)
+        if image.mode in ("RGBA", "P"): image = image.convert("RGB")
         max_width = 1920
         if image.width > max_width:
             ratio = max_width / image.width
-            new_height = int(image.height * ratio)
-            image = image.resize((max_width, new_height), Image.Resampling.LANCZOS)
-            
-        # Guardar en buffer como WebP
+            image = image.resize((max_width, int(image.height * ratio)), Image.Resampling.LANCZOS)
         buffer_salida = io.BytesIO()
-        # quality=80 es excelente balance peso/calidad
         image.save(buffer_salida, format="WEBP", quality=80, optimize=True)
         buffer_salida.seek(0)
-        
         return buffer_salida
-    except Exception as e:
-        st.error(f"Error comprimiendo: {e}")
-        return archivo_upload # Si falla, devolver original
+    except: return archivo_upload
+
+# --- NUEVA FUNCIÓN PARA EL LOGO ---
+def render_logo(width_val=150):
+    """Busca logo.png en assets, si no existe, pone texto"""
+    path_logo = os.path.join("assets", "logo.png")
+    if os.path.exists(path_logo):
+        st.image(path_logo, width=width_val)
+    else:
+        # Fallback elegante si no has subido el logo aun
+        st.markdown(f"## 🏦 **Provident**") 
 
 def get_imagen_plantilla(tipo_evento):
     carpeta_assets = "assets" 
-    url_default = "https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png"
+    # Fallback online por si no hay assets
+    url_default = "https://via.placeholder.com/400x300.png?text=Provident+Evento" 
     if not tipo_evento: tipo_evento = "default"
     if not os.path.exists(carpeta_assets): return url_default
     clave_buscada = limpiar_clave(str(tipo_evento))
     try:
         archivos = os.listdir(carpeta_assets)
         for archivo in archivos:
-            if limpiar_clave(os.path.splitext(archivo)[0]) == clave_buscada:
-                return os.path.join(carpeta_assets, archivo)
+            if limpiar_clave(os.path.splitext(archivo)[0]) == clave_buscada: return os.path.join(carpeta_assets, archivo)
         for archivo in archivos:
             if "default" in limpiar_clave(archivo): return os.path.join(carpeta_assets, archivo)
     except: pass
@@ -300,7 +283,9 @@ if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
     col_izq, col_centro, col_der = st.columns([1, 2, 1])
     with col_centro:
-        st.image("https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png", width=200)
+        # --- AQUI ESTA EL CAMBIO: USAR LA FUNCIÓN SEGURA ---
+        render_logo(width_val=200)
+        
         st.markdown("### 🔐 Acceso al Sistema")
         with st.form("login_form"):
             usuario_input = st.text_input("👤 Usuario:")
@@ -323,7 +308,10 @@ if not st.session_state.logged_in:
 else:
     # HEADER
     c_logo, c_user, c_logout = st.columns([1, 6, 1])
-    with c_logo: st.image("https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png", width=100)
+    with c_logo: 
+        # --- AQUI TAMBIEN USAMOS LA FUNCIÓN SEGURA ---
+        render_logo(width_val=100)
+        
     with c_user: st.markdown(f"#### 👤 {st.session_state.user_name} | {st.session_state.user_role.upper()}")
     with c_logout:
         if st.button("Salir", use_container_width=True):
@@ -360,7 +348,7 @@ else:
 
     st.divider()
 
-    # ADMIN
+    # PESTAÑAS ADMIN
     if st.session_state.user_role == "admin":
         tab_main, tab_users, tab_config_db, tab_hist = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Configuración DB", "📜 Historial"])
         with tab_users:
@@ -447,9 +435,7 @@ else:
             # FUNCION CORE AUTO-UPLOAD
             def render_celda_auto(columna, key, label, fields_dict):
                 with columna:
-                    # Título más grande con clase personalizada
                     st.markdown(f'<p class="caption-text">{label}</p>', unsafe_allow_html=True)
-                    
                     if fields_dict.get(key):
                         url_img = fields_dict[key][0]['url']
                         st.image(url_img, use_container_width=True)
@@ -462,9 +448,7 @@ else:
                     else:
                         file = st.file_uploader(key, key=f"up_{evt['id']}_{key}", label_visibility="collapsed", type=['jpg','png','jpeg','webp'])
                         if file is not None:
-                            # 1. Comprimir
                             file_optimizado = comprimir_imagen_webp(file)
-                            
                             with st.spinner(f"Subiendo {label}..."):
                                 try:
                                     resp = cloudinary.uploader.upload(file_optimizado, resource_type="image", format="webp")
@@ -496,16 +480,12 @@ else:
             c1, c2 = st.columns(2)
             render_celda_auto(c1, "Foto de equipo", "Foto de Equipo", fields)
 
-            # SECCIÓN 2: ACTIVIDAD (GRID CORRECTO PARA MOBILE 1,2,3,4)
+            # SECCIÓN 2: ACTIVIDAD
             st.markdown("#### 2. Fotos de Actividad")
             keys_act = ["Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07"]
-            
-            # Iteramos de 2 en 2 para crear filas explícitas
             for i in range(0, len(keys_act), 2):
                 col_row = st.columns(2)
-                # Columna Izquierda
                 render_celda_auto(col_row[0], keys_act[i], keys_act[i], fields)
-                # Columna Derecha (si existe el par)
                 if i + 1 < len(keys_act):
                     render_celda_auto(col_row[1], keys_act[i+1], keys_act[i+1], fields)
 
@@ -514,7 +494,6 @@ else:
             t_sec3 = "3. Reporte y Lista" if is_sucursal else "3. Reporte Firmado"
             st.markdown(f"#### {t_sec3}")
             c_rep, c_list = st.columns(2)
-            
             render_celda_auto(c_rep, "Reporte firmado", "Reporte Firmado", fields)
             if is_sucursal:
                 render_celda_auto(c_list, "Lista de asistencia", "Lista de Asistencia", fields)
