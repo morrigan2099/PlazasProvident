@@ -24,13 +24,17 @@ st.markdown("""
     /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
     
     /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
-    .logo-light { display: none; }
-    .logo-dark { display: block; }
+    /* Aquí mostramos el lightlogo.png y ocultamos el darklogo.png */
+    .logo-light { display: block; }
+    .logo-dark { display: none; }
 
     /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
+    /* Aquí invertimos: Ocultamos light, Mostramos dark */
+    
+    /* Caso 1: Detectado por Sistema Operativo (Móvil) */
     @media (prefers-color-scheme: dark) {
-        .logo-light { display: block !important; }
-        .logo-dark { display: none !important; }
+        .logo-light { display: none !important; }
+        .logo-dark { display: block !important; }
     }
     /* ESTILOS GENERALES */
     .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
