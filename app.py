@@ -19,21 +19,31 @@ st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
+    /* --- 1. LOGOTIPO DINÁMICO (LÓGICA CORRECTA DE CONTRASTE) --- */
+    
+    /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
+    /* Muestra DARKLOGO (para que contraste), Oculta LIGHTLOGO */
     .logo-light { display: none; }
     .logo-dark { display: block; }
 
+    /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
+    /* Muestra LIGHTLOGO (para que contraste), Oculta DARKLOGO */
+    
+    /* Caso 1: Detectado por Sistema Operativo (Móvil) */
     @media (prefers-color-scheme: dark) {
         .logo-light { display: block !important; }
         .logo-dark { display: none !important; }
     }
+
+    /* Caso 2: Detectado por Configuración de Streamlit */
     [data-theme="dark"] .logo-light { display: block !important; }
     [data-theme="dark"] .logo-dark { display: none !important; }
+
 
     /* --- 2. ESTILOS GENERALES --- */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {}
 
-    /* Expanders Negros */
+    /* Expanders Negros (Alto Contraste) */
     .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
     .streamlit-expanderContent { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #333333 !important; border-top: none !important; }
     .streamlit-expanderHeader p, .streamlit-expanderHeader span, .streamlit-expanderHeader svg,
@@ -62,6 +72,8 @@ st.markdown("""
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
     img { max-width: 100%; }
     .caption-text { font-size: 1.1rem !important; font-weight: 700 !important; margin-bottom: 0.5rem; }
+    
+    /* Compactar markdown en detalles */
     .compact-md p { margin-bottom: 0px !important; line-height: 1.4 !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -78,7 +90,7 @@ AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87
 ADMIN_BASE_ID = "appRF7jHcmBJZA1px"
 USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"
 CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"
-BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd"  # <--- ⚠️ PON AQUÍ EL ID DE LA TABLA "MODIFICACION CON PERMISO"
+BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd"  # <--- ✅ ID DE RESPALDO INTEGRADO
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
@@ -126,6 +138,7 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
+# --- LOGO DINÁMICO ---
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
@@ -134,12 +147,21 @@ def render_logo_dinamico(is_banner=False):
     light_path = os.path.join("assets", "lightlogo.png")
     dark_path = os.path.join("assets", "darklogo.png")
     width_css = "width: 100%;" if is_banner else "width: 150px; max-width: 100%;"
+    
     if os.path.exists(light_path) and os.path.exists(dark_path):
         b64_light = get_base64_image(light_path)
         b64_dark = get_base64_image(dark_path)
-        html = f"""<div style="text-align: center;"><img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}"><img src="data:image/png;base64,{b64_dark}" class="logo-dark" style="{width_css}"></div>"""
+        
+        # HTML CON CLASES PARA SWITCH CSS
+        html = f"""
+        <div style="text-align: center;">
+            <img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}">
+            <img src="data:image/png;base64,{b64_dark}" class="logo-dark" style="{width_css}">
+        </div>
+        """
         st.markdown(html, unsafe_allow_html=True)
-    else: st.markdown("## 🏦 **Provident**")
+    else:
+        st.markdown("## 🏦 **Provident**")
 
 def get_imagen_plantilla(tipo_evento):
     carpeta_assets = "assets"
@@ -208,14 +230,12 @@ def crear_respaldo_evento(fields_original):
     for k in campos_copiar:
         if k in fields_original:
             # Para imagenes, Airtable necesita una lista de dicts con url
-            if isinstance(fields_original[k], list) and 'url' in fields_original[k][0]:
+            if isinstance(fields_original[k], list) and len(fields_original[k]) > 0 and 'url' in fields_original[k][0]:
                 new_data[k] = [{'url': img['url']} for img in fields_original[k]]
             else:
                 new_data[k] = fields_original[k]
     
-    # Agregar timestamp de respaldo si se desea (opcional)
-    new_data["Notas"] = f"Respaldo automático: {datetime.now()}"
-    
+    # Copia a la tabla de Backup (Modificacion Con Permiso)
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{BACKUP_TABLE_ID}"
     return airtable_request("POST", url, {"fields": new_data})
 
@@ -226,6 +246,7 @@ def solicitar_desbloqueo(base_id, table_id, record_id):
 def aprobar_desbloqueo_admin(base_id, table_id, record_full_data):
     # 1. Crear Respaldo
     resp_backup = crear_respaldo_evento(record_full_data['fields'])
+    # Aunque falle el respaldo, por seguridad desbloqueamos? No, mejor asegurar respaldo.
     if resp_backup and resp_backup.status_code == 200:
         # 2. Desbloquear Original
         url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_full_data['id']}"
@@ -246,6 +267,14 @@ def cargar_usuarios_airtable():
                 users[u] = {"id": rec['id'], "password": f.get('Password'), "role": f.get('Role','user'), "plazas": pl}
     return users
 
+def crear_actualizar_usuario_airtable(u, p, r, pl, rid=None):
+    data = {"fields": {"Usuario": u, "Password": p, "Role": r, "Plazas": pl}}
+    if rid: url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}/{rid}"; return airtable_request("PATCH", url, data).status_code==200
+    else: url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}"; return airtable_request("POST", url, data).status_code==200
+
+def eliminar_usuario_airtable(rid):
+    return airtable_request("DELETE", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}/{rid}").status_code==200
+
 def cargar_config_airtable():
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}")
     conf = {"bases":{}, "tables":{}}
@@ -259,6 +288,24 @@ def cargar_config_airtable():
                     if bid not in conf['tables']: conf['tables'][bid]={}
                     conf['tables'][bid][f.get('Nombre_Tabla')]=tid
     return conf
+
+def guardar_config_airtable(bn, bid, tn, tid):
+    data = {"fields": {"Nombre_Base":bn, "ID_Base":bid, "Nombre_Tabla":tn, "ID_Tabla":tid, "Activo":True}}
+    airtable_request("POST", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}", data)
+
+def create_new_event(base_id, table_id, data):
+    r = airtable_request("POST", f"https://api.airtable.com/v0/{base_id}/{table_id}", {"fields": data})
+    return r.status_code == 200, r.text if r else "Error"
+
+def upload_evidence_to_airtable(base_id, table_id, record_id, updates):
+    r = airtable_request("PATCH", f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}", {"fields": updates})
+    return r.status_code == 200 if r else False
+
+def delete_field_from_airtable(base_id, table_id, record_id, field):
+    r = airtable_request("PATCH", f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}", {"fields": {field: None}})
+    return r.status_code == 200 if r else False
+
+def registrar_historial(accion, usuario, sucursal, detalles): pass 
 
 # ==============================================================================
 # 4. SESIÓN
@@ -327,7 +374,6 @@ else:
     if st.session_state.user_role == "admin":
         tm, tu, tc, ta = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Config", "🔐 Solicitudes"])
         
-        # ... (Pestañas de usuarios y config iguales que antes) ...
         with tu:
             st.subheader("Gestión Usuarios"); udb = cargar_usuarios_airtable()
             sel = st.selectbox("Editar", ["(Nuevo)"]+list(udb.keys()))
@@ -338,16 +384,21 @@ else:
                 nr=st.selectbox("Rol",["user","admin"],0 if d['role']=="user" else 1); npl=st.multiselect("Plazas", SUCURSALES_OFICIALES, d['plazas'])
                 if st.form_submit_button("Guardar", type="primary"):
                     crear_actualizar_usuario_airtable(nu,np,nr,npl,rid); st.success("OK"); st.rerun()
+            if rid and st.button("Eliminar", type="secondary"): eliminar_usuario_airtable(rid); st.rerun()
         
         with tc:
             st.subheader("Agregar Config"); 
-            with st.form("cf"):
-                c1,c2=st.columns(2); nb=c1.text_input("Nombre Base"); ib=c2.text_input("ID Base")
-                nt=c1.text_input("Nombre Tabla"); it=c2.text_input("ID Tabla")
-                if st.form_submit_button("Guardar", type="primary"):
-                    url=f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}"
-                    requests.post(url, json={"fields":{"Nombre_Base":nb,"ID_Base":ib,"Nombre_Tabla":nt,"ID_Tabla":it,"Activo":True}}, headers={"Authorization":f"Bearer {AIRTABLE_TOKEN}","Content-Type":"application/json"})
-                    st.success("OK"); st.rerun()
+            with st.spinner("Buscando Bases..."): real_bases = api_get_all_bases()
+            if not real_bases: st.error("Error al buscar bases.")
+            else:
+                sb_n = st.selectbox("Base Real", list(real_bases.keys())); sb_id = real_bases[sb_n]
+                with st.spinner("Tablas..."): real_tables = api_get_all_tables(sb_id)
+                sts = st.multiselect("Tablas a habilitar", list(real_tables.keys()))
+                if st.button("Guardar Config", type="primary"):
+                    if sts:
+                        for t in sts: guardar_config_airtable(sb_n, sb_id, t, real_tables[t])
+                        st.success("OK"); st.rerun()
+            st.json(conf)
 
         with ta:
             st.subheader("🔐 Solicitudes de Desbloqueo (Tabla Actual)")
@@ -383,14 +434,19 @@ else:
                         # Estado Bloqueo Logic
                         estado_bloqueo = f.get('Estado_Bloqueo')
                         is_locked = ya_tiene and (estado_bloqueo != 'Desbloqueado')
-                        
                         icon_lock = "🔒" if is_locked else ""
                         
                         with st.expander(f"{icon_lock} {f.get('Fecha')} | {f.get('Tipo')}", expanded=True):
                             c1, c2 = st.columns([1, 2.5]); c1.image(get_imagen_plantilla(f.get('Tipo')), use_container_width=True)
                             with c2:
                                 st.markdown(f"### 🗓️ {formatear_fecha_larga(f.get('Fecha'))}")
-                                st.markdown(f"**📌 Tipo:** {f.get('Tipo','--')}  \n**📍 Punto:** {f.get('Punto de reunion','--')}  \n**🛣️ Ruta:** {f.get('Ruta a seguir','--')}  \n**🏙️ Muni:** {f.get('Municipio','--')}  \n**⏰ Hora:** {f.get('Hora','--')}")
+                                st.markdown(f"""
+                                **📌 Tipo:** {f.get('Tipo','--')}  
+                                **📍 Punto:** {f.get('Punto de reunion','--')}  
+                                **🛣️ Ruta:** {f.get('Ruta a seguir','--')}  
+                                **🏙️ Muni:** {f.get('Municipio','--')}  
+                                **⏰ Hora:** {f.get('Hora','--')}
+                                """)
                                 st.markdown("<br>",unsafe_allow_html=True); cb1, cb2 = st.columns(2)
                                 
                                 if cb1.button("📸 EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True): st.session_state.selected_event=r; st.rerun()
@@ -399,63 +455,65 @@ else:
                 else: st.info("No hay eventos.")
             else: st.info("Selecciona parámetros.")
 
-        # 2. REAGENDAR (Igual que antes)
+        # 2. REAGENDAR
         elif st.session_state.rescheduling_event:
             evt = st.session_state.rescheduling_event; f=evt['fields']
             if st.button("⬅️ CANCELAR", type="secondary"): st.session_state.rescheduling_event=None; st.rerun()
             st.markdown("### ⚠️ Reagendar"); 
             with st.form("rgh"):
                 c1,c2,c3=st.columns(3)
-                nf=c1.date_input("Fecha"); nh=c2.text_input("Hora", f.get("Hora")); nm=c3.text_input("Muni", f.get("Municipio"))
-                # ... (resto campos) ...
+                try: fd=datetime.strptime(f.get('Fecha'),"%Y-%m-%d")
+                except: fd=datetime.now()
+                nf=c1.date_input("Fecha", value=fd); nh=c2.text_input("Hora", f.get("Hora")); nm=c3.text_input("Muni", f.get("Municipio"))
+                nt=c1.text_input("Tipo", f.get('Tipo')); ns=c2.text_input("Sección", f.get('Seccion')); np=c3.text_input("Punto", f.get('Punto de reunion'))
+                nr=c1.text_input("Ruta", f.get('Ruta a seguir')); nam=c2.text_input("AM", f.get('AM Responsable')); ndm=c3.text_input("DM", f.get('DM Responsable'))
+                ntam=c1.text_input("Tel AM", f.get('Teléfono AM')); ntdm=c2.text_input("Tel DM", f.get('Teléfono DM')); nc=c3.text_input("Cantidad", f.get('Cantidad'))
+                
                 if st.form_submit_button("Guardar", type="primary"):
-                    # Logica crear nuevo...
-                    st.success("Hecho"); st.session_state.rescheduling_event=None; st.rerun()
+                    new_reg = {"Fecha":nf.strftime("%Y-%m-%d"),"Hora":nh,"Tipo":nt,"Sucursal":f.get('Sucursal'),"Seccion":ns,"Ruta a seguir":nr,"Punto de reunion":np,"Municipio":f"{nm} (Evento Reagendado)","Cantidad":nc,"AM Responsable":nam,"Teléfono AM":ntam,"DM Responsable":ndm,"Teléfono DM":ntdm}
+                    if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Hecho"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view); st.rerun()
+                    else: st.error("Error")
 
         # 3. CARGA EVIDENCIA (CON BLOQUEO)
         else:
             evt = st.session_state.selected_event; f=evt['fields']
             if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
-            st.divider(); st.markdown(f"### 📸 {f.get('Tipo')}"); st.divider()
+            st.divider(); st.markdown(f"### 📸 {f.get('Tipo')} - {obtener_ubicacion_corta(f)}"); st.divider()
             
-            # Lógica de Bloqueo Local
+            # Lógica de Bloqueo
             ya_tiene = check_evidencia_completa(f)
             estado = f.get('Estado_Bloqueo')
             bloqueado = ya_tiene and (estado != 'Desbloqueado')
 
             if bloqueado:
                 st.warning("🔒 Registro Bloqueado. Se requiere permiso para modificar.")
-                if estado == 'Solicitado':
-                    st.info("⏳ Solicitud enviada al administrador. Esperando aprobación.")
+                if estado == 'Solicitado': st.info("⏳ Solicitud enviada. Esperando aprobación.")
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
-                        with st.spinner("Enviando solicitud..."):
+                        with st.spinner("Enviando..."):
                             if solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id']):
-                                st.success("Solicitud enviada."); evt['fields']['Estado_Bloqueo']='Solicitado'; st.rerun()
-                            else: st.error("Error al solicitar.")
+                                st.success("Enviado."); evt['fields']['Estado_Bloqueo']='Solicitado'; st.rerun()
+                            else: st.error("Error.")
 
             def render_cell(col, k, label):
                 with col:
                     st.markdown(f'<p class="caption-text">{label}</p>', unsafe_allow_html=True)
                     if f.get(k):
                         st.image(f[k][0]['url'], use_container_width=True)
-                        if not bloqueado: # SOLO MOSTRAR ELIMINAR SI NO ESTA BLOQUEADO
+                        if not bloqueado:
                             if st.button("🗑️ Eliminar", key=f"d_{k}", type="secondary", use_container_width=True):
-                                url = f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}"
-                                airtable_request("PATCH", url, {"fields": {k: None}})
+                                airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {k: None}})
                                 del st.session_state.selected_event['fields'][k]; st.rerun()
                     else:
-                        if not bloqueado: # SOLO PERMITIR SUBIR SI NO ESTA BLOQUEADO
+                        if not bloqueado:
                             up = st.file_uploader(k, key=f"u_{k}", type=['jpg','png','jpeg'], label_visibility="collapsed")
                             if up:
                                 img_ok = comprimir_imagen_webp(up)
                                 with st.spinner("Subiendo..."):
                                     res = cloudinary.uploader.upload(img_ok, format="webp", resource_type="image")
-                                    url = f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}"
-                                    airtable_request("PATCH", url, {"fields": {k:[{"url":res['secure_url']}]}})
+                                    upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], {k:[{"url":res['secure_url']}]})
                                     st.session_state.selected_event['fields'][k] = [{"url":res['secure_url']}]; st.rerun()
-                        else:
-                            st.caption("🔒 Bloqueado")
+                        else: st.caption("🔒 Bloqueado")
 
             st.markdown("#### 1. Foto Inicio"); c1,c2 = st.columns(2); render_cell(c1, "Foto de equipo", "Foto Equipo")
             st.markdown("#### 2. Actividad"); keys=["Foto 01","Foto 02","Foto 03","Foto 04","Foto 05","Foto 06","Foto 07"]
