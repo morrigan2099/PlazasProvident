@@ -9,15 +9,18 @@ import json
 import time
 import unicodedata
 import re
-import pytz # <--- LIBRERÍA PARA ZONA HORARIA
 from PIL import Image
 import io
 import base64
+import pytz
 
 # ==============================================================================
 # 1. CONFIGURACIÓN Y ESTILOS
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
+
+st.divider(); 
+            if st.button("⬅️ REGRESAR (FINAL)", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
 
 st.markdown("""
 <style>
@@ -182,16 +185,15 @@ def registrar_historial(accion, detalles):
     rol = st.session_state.get('user_role', '--')
     sucursal = st.session_state.get('sucursal_actual', 'N/A')
     
-    # Obtener hora actual en zona horaria México
     try:
         mx_zone = pytz.timezone('America/Mexico_City')
         fecha = datetime.now(mx_zone).strftime("%Y-%m-%d %H:%M:%S")
     except:
-        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # Fallback si falla pytz
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     data = {"fields": {"Fecha": fecha, "Usuario": usuario, "Rol": rol, "Sucursal": sucursal, "Accion": accion, "Detalles": detalles}}
     res = requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
-    if res.status_code != 200: st.toast(f"Error historial: {res.text}", icon="⚠️")
+    # if res.status_code != 200: st.toast(f"Error historial: {res.text}", icon="⚠️") # Silent fail mejor
 
 def get_full_history():
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}?sort%5B0%5D%5Bfield%5D=Fecha&sort%5B0%5D%5Bdirection%5D=desc")
@@ -341,6 +343,8 @@ if 'allowed_plazas' not in st.session_state: st.session_state.allowed_plazas=[]
 if 'sucursal_actual' not in st.session_state: st.session_state.sucursal_actual=""
 if 'selected_event' not in st.session_state: st.session_state.selected_event=None
 if 'rescheduling_event' not in st.session_state: st.session_state.rescheduling_event=None
+# Inicializar historial en sesión para manejo de vista
+if 'history_data_view' not in st.session_state: st.session_state.history_data_view = []
 
 # ==============================================================================
 # 5. LOGIN
@@ -459,15 +463,61 @@ else:
         
         with th:
             st.subheader("📜 Auditoría del Sistema")
-            with st.spinner("Cargando logs..."):
+            c_refresh, c_delete = st.columns([1, 4])
+            if c_refresh.button("🔄 Actualizar", type="primary"):
+                with st.spinner("Actualizando historial..."):
+                    st.session_state.history_data_view = get_full_history() # Carga manual
+            
+            if c_delete.button("🗑️ Eliminar Historial Completo (Limpiar Vista)", type="secondary"):
+                st.session_state.history_data_view = [] # Limpieza visual
+                st.success("Vista limpiada.")
+                st.rerun()
+
+            # Lógica de Visualización
+            logs = st.session_state.history_data_view
+            
+            # Si está vacío (o es primera carga), intentamos cargar automáticamente (opcional, pero mejor UX)
+            if not logs and 'history_loaded' not in st.session_state:
                 logs = get_full_history()
-                if logs:
-                    df_logs = pd.DataFrame(logs)
-                    required_cols = ["Fecha", "Usuario", "Accion", "Sucursal", "Rol", "Detalles"]
-                    for c in required_cols:
-                        if c not in df_logs.columns: df_logs[c] = ""
-                    st.dataframe(df_logs[required_cols], use_container_width=True)
-                else: st.info("No hay logs registrados.")
+                st.session_state.history_data_view = logs
+                st.session_state.history_loaded = True
+
+            if logs:
+                df = pd.DataFrame(logs)
+                
+                # Filtros
+                col_u, col_s = st.columns(2)
+                if 'Usuario' in df.columns:
+                    sel_users = col_u.multiselect("Filtrar por Usuario", df['Usuario'].unique())
+                    if sel_users: df = df[df['Usuario'].isin(sel_users)]
+                if 'Sucursal' in df.columns:
+                    sel_sucs = col_s.multiselect("Filtrar por Sucursal", df['Sucursal'].unique())
+                    if sel_sucs: df = df[df['Sucursal'].isin(sel_sucs)]
+
+                # Agrupación por Mes
+                if 'Fecha' in df.columns:
+                    df['Fecha_DT'] = pd.to_datetime(df['Fecha'], errors='coerce')
+                    # Mapeo de meses en español
+                    meses_es = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
+                    
+                    # Creamos columna de agrupación (Año-Mes numérico para ordenar, Nombre para mostrar)
+                    df['YearMonth'] = df['Fecha_DT'].dt.strftime('%Y-%m')
+                    
+                    # Ordenar grupos del más reciente al más antiguo
+                    for ym in sorted(df['YearMonth'].unique(), reverse=True):
+                        df_month = df[df['YearMonth'] == ym]
+                        if not df_month.empty:
+                            dt_obj = df_month.iloc[0]['Fecha_DT']
+                            nombre_mes = f"{meses_es[dt_obj.month]} {dt_obj.year}"
+                            
+                            with st.expander(f"📅 {nombre_mes} ({len(df_month)} registros)", expanded=(ym == sorted(df['YearMonth'].unique(), reverse=True)[0])): # Solo expandir el primero
+                                # Mostrar tabla limpia
+                                display_cols = ["Fecha", "Usuario", "Accion", "Sucursal", "Detalles"]
+                                st.dataframe(df_month[[c for c in display_cols if c in df_month.columns]], use_container_width=True, hide_index=True)
+                else:
+                    st.dataframe(df, use_container_width=True) # Fallback si no hay fecha
+            else:
+                st.info("No hay datos para mostrar en esta vista.")
 
         main_area = tm
     else: main_area = st.container()
@@ -541,7 +591,7 @@ else:
                 st.warning("🔒 Registro Completo y Bloqueado.")
                 if estado == 'Solicitado': 
                     st.info("⏳ Solicitud enviada. Esperando autorización... (La pantalla se actualizará automáticamente)")
-                    time.sleep(4); st.rerun()
+                    time.sleep(4); st.rerun() # POLLING
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
                         with st.spinner("Enviando..."):
@@ -583,14 +633,12 @@ else:
             st.markdown(f"#### {t3}"); cr3=st.columns(2); render_cell(cr3[0], "Reporte firmado", "Reporte")
             if f.get('Tipo') == "Actividad en Sucursal": render_cell(cr3[1], "Lista de asistencia", "Lista")
             
+            # BOTÓN FINALIZAR -> REGRESAR A LISTA
             if not bloqueado and esta_completo:
                 st.divider(); st.info("⚠️ Tienes permiso temporal.")
                 if st.button("💾 FINALIZAR Y GUARDAR CAMBIOS", type="primary", use_container_width=True):
                     with st.spinner("Finalizando y bloqueando..."):
                         airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {"Estado_Bloqueo": None}})
                         registrar_historial("Fin Edición Permiso", f"Usuario finalizó edición ID {evt['id']}")
-                        st.session_state.selected_event = None
+                        st.session_state.selected_event = None # <--- REGRESO AUTOMÁTICO
                         st.success("Guardado."); st.rerun()
-
-            st.divider(); 
-            if st.button("⬅️ REGRESAR (FINAL)", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
