@@ -12,61 +12,23 @@ from PIL import Image
 import io
 
 # ==============================================================================
-# 1. CONFIGURACIÓN Y ESTILOS (EXPANDERS CELESTES)
+# 1. CONFIGURACIÓN Y ESTILOS (TEMA CLARO + EXPANDERS NEGROS)
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* --- 1. TEMA CLARO GENERAL (FONDO BLANCO) --- */
+    /* --- 1. TEMA GENERAL (CLARO / LIGHT MODE) --- */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         background-color: #ffffff !important;
     }
     
-    /* Textos generales de la página (fuera de expanders) a negro */
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp li, .stApp label {
+    /* Textos generales fuera de tarjetas (Negro) */
+    h1, h2, h3, h4, h5, h6, p, li, span, label, div {
         color: #000000 !important;
     }
 
-    /* --- 2. DESPLEGABLES (EXPANDERS) PERSONALIZADOS --- */
-    /* ENCABEZADO (La barra que se ve siempre) */
-    .streamlit-expanderHeader {
-        background-color: #00b0ff !important; /* Celeste Brillante */
-        color: #ffffff !important;
-        border: 1px solid #00b0ff !important;
-        border-radius: 8px !important;
-    }
-    
-    /* CONTENIDO (Lo que aparece al abrir) */
-    .streamlit-expanderContent {
-        background-color: #00b0ff !important; /* Celeste Brillante */
-        color: #ffffff !important;
-        border: 1px solid #00b0ff !important;
-        border-bottom-left-radius: 8px !important;
-        border-bottom-right-radius: 8px !important;
-    }
-
-    /* FORZAR TEXTO BLANCO DENTRO DE LOS EXPANDERS */
-    /* Esto sobreescribe la regla general de texto negro solo para lo que está dentro del expander */
-    .streamlit-expanderHeader p, 
-    .streamlit-expanderHeader span,
-    .streamlit-expanderHeader svg {
-        color: #ffffff !important;
-        fill: #ffffff !important; /* Para la flechita */
-    }
-    
-    .streamlit-expanderContent p, 
-    .streamlit-expanderContent span, 
-    .streamlit-expanderContent div, 
-    .streamlit-expanderContent h1, 
-    .streamlit-expanderContent h2, 
-    .streamlit-expanderContent h3,
-    .streamlit-expanderContent li,
-    .streamlit-expanderContent strong {
-        color: #ffffff !important;
-    }
-
-    /* --- 3. INPUTS Y MENUS (FONDO BLANCO, TEXTO NEGRO) --- */
+    /* Inputs y Menús (Fondo Blanco / Texto Negro) */
     .stTextInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
         background-color: #ffffff !important;
         color: #000000 !important;
@@ -79,45 +41,82 @@ st.markdown("""
         background-color: #ffffff !important;
         color: #000000 !important;
     }
-    /* Highlight menú */
-    li[role="option"]:hover, li[role="option"][aria-selected="true"] {
-        background-color: #e1f5fe !important;
+    /* Texto dentro de las opciones del menú */
+    div[data-baseweb="select"] span {
+        color: #000000 !important;
     }
 
-    /* --- 4. BOTONES --- */
-    /* Primario (Verde Sólido, Texto Blanco) */
+    /* --- 2. EXPANDERS (TARJETAS) -> FONDO NEGRO / TEXTO BLANCO --- */
+    
+    /* Encabezado del Expander */
+    .streamlit-expanderHeader {
+        background-color: #000000 !important; /* NEGRO PURO */
+        color: #ffffff !important;             /* BLANCO */
+        border: 1px solid #333333 !important;
+        border-radius: 8px !important;
+    }
+    
+    /* Contenido del Expander */
+    .streamlit-expanderContent {
+        background-color: #1a1a1a !important; /* GRIS MUY OSCURO */
+        color: #ffffff !important;
+        border: 1px solid #333333 !important;
+        border-top: none !important;
+        border-bottom-left-radius: 8px !important;
+        border-bottom-right-radius: 8px !important;
+    }
+
+    /* FORZAR TEXTO BLANCO SOLO DENTRO DE LOS EXPANDERS */
+    /* Usamos selectores específicos para sobreescribir la regla general de texto negro */
+    .streamlit-expanderHeader p, 
+    .streamlit-expanderHeader span,
+    .streamlit-expanderHeader svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
+    
+    .streamlit-expanderContent p, 
+    .streamlit-expanderContent span, 
+    .streamlit-expanderContent div, 
+    .streamlit-expanderContent h1, 
+    .streamlit-expanderContent h2, 
+    .streamlit-expanderContent h3, 
+    .streamlit-expanderContent li, 
+    .streamlit-expanderContent strong,
+    .streamlit-expanderContent label {
+        color: #ffffff !important;
+    }
+
+    /* --- 3. BOTONES (TEXTO BLANCO SIEMPRE) --- */
+    
+    /* Primario (Verde Sólido) */
     .stButton button[kind="primary"] {
         background-color: #00c853 !important;
         border: none !important;
         color: #ffffff !important;
         font-weight: 700 !important;
     }
-    .stButton button[kind="primary"]:hover {
-        background-color: #009624 !important;
-    }
-    /* El texto interno del botón primario debe ser blanco */
     .stButton button[kind="primary"] p { color: #ffffff !important; }
+    .stButton button[kind="primary"]:hover { background-color: #009624 !important; }
 
-    /* Secundario (Rojo Sólido, Texto Blanco) */
+    /* Secundario (Rojo Sólido) */
     .stButton button[kind="secondary"] {
         background-color: #dc2626 !important;
         border: none !important;
         color: #ffffff !important;
         font-weight: 600 !important;
     }
-    .stButton button[kind="secondary"]:hover {
-        background-color: #b91c1c !important;
-    }
-    /* El texto interno del botón secundario debe ser blanco */
     .stButton button[kind="secondary"] p { color: #ffffff !important; }
+    .stButton button[kind="secondary"]:hover { background-color: #b91c1c !important; }
 
-    /* --- 5. UPLOADER --- */
+    /* --- 4. UPLOADER --- */
     [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
+    
     [data-testid="stFileUploader"] section {
         min-height: 0px !important;
         padding: 10px !important;
-        background-color: #f8f9fa !important;
-        border: 2px dashed #00b0ff !important;
+        background-color: #f8f9fa !important; /* Fondo claro */
+        border: 2px dashed #00b0ff !important; /* Borde Celeste */
         border-radius: 12px;
         align-items: center;
         justify-content: center;
@@ -132,16 +131,16 @@ st.markdown("""
         display: block;
     }
 
-    /* --- 6. VARIOS --- */
+    /* --- 5. OCULTAR NATIVOS --- */
     [data-testid="stSidebar"] {display: none;}
     [data-testid="collapsedControl"] {display: none;}
     img { max-width: 100%; }
     
-    /* Clase para títulos de fotos (negros porque están sobre fondo blanco en la carga) */
+    /* Títulos de fotos (Negros porque están en fondo blanco) */
     .caption-text {
         font-size: 1.1rem !important;
         font-weight: 700 !important;
-        color: #1f2937 !important;
+        color: #000000 !important;
         margin-bottom: 0.5rem;
     }
 </style>
@@ -169,7 +168,7 @@ cloudinary.config(
 )
 
 # ==============================================================================
-# 2. FUNCIONES
+# 2. FUNCIONES DE UTILIDAD
 # ==============================================================================
 def limpiar_clave(texto):
     if not isinstance(texto, str): return str(texto).lower()
@@ -209,7 +208,8 @@ def comprimir_imagen_webp(archivo_upload):
 def render_logo(is_banner=False):
     path_logo = os.path.join("assets", "logo.png")
     if os.path.exists(path_logo):
-        st.image(path_logo, use_container_width=True if is_banner else False, width=120 if not is_banner else None)
+        # use_container_width=True hace que llene la columna
+        st.image(path_logo, use_container_width=True) 
     else:
         st.markdown(f"## 🏦 **Provident**") 
 
@@ -264,7 +264,7 @@ def check_evidencia_completa(fields):
     return False
 
 # ==============================================================================
-# 3. FUNCIONES AIRTABLE Y LOGICA DE BORRADO
+# 3. FUNCIONES AIRTABLE
 # ==============================================================================
 def api_get_all_bases():
     url = "https://api.airtable.com/v0/meta/bases"
@@ -361,7 +361,9 @@ if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
     c_izq, c_centro, c_der = st.columns([1, 2, 1])
     with c_centro:
-        render_logo(is_banner=False)
+        # LOGO GRANDE DENTRO DE LA CAJA (BANNER DEL ANCHO DE COLUMNA)
+        render_logo(is_banner=True) 
+        
         st.markdown("<h3 style='text-align: center;'>🔐 Acceso al Sistema</h3>", unsafe_allow_html=True)
         with st.form("login_form"):
             usuario_input = st.text_input("👤 Usuario:")
@@ -383,7 +385,7 @@ if not st.session_state.logged_in:
 # ==============================================================================
 else:
     # --- HEADER ---
-    render_logo(is_banner=True) # Logo Full Width
+    render_logo(is_banner=True) # Banner Full Width
     st.markdown("<br>", unsafe_allow_html=True)
 
     c_user, c_fill, c_logout = st.columns([3, 4, 1])
@@ -422,7 +424,7 @@ else:
 
     st.divider()
 
-    # --- ADMIN ---
+    # --- PESTAÑAS ADMIN ---
     if st.session_state.user_role == "admin":
         tab_main, tab_users, tab_config_db, tab_hist = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Configuración DB", "📜 Historial"])
         with tab_users:
