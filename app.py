@@ -44,90 +44,79 @@ YEAR_ACTUAL = 2025 # Año fijo
 # 2. FUNCIONES DE UTILIDAD
 # ==============================================================================
 
-def formatear_fecha_larga(fecha_str):
-    """
-    Convierte '2025-01-25' a 'Sábado 25 de Enero de 2025'.
-    """
-    if not fecha_str: return "Fecha pendiente"
-    
-    dias = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
-    meses = {
-        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
-        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
-    }
-    
-    try:
-        dt = datetime.strptime(fecha_str, "%Y-%m-%d")
-        dia_semana = dias[dt.weekday()]
-        mes_nombre = meses[dt.month]
-        return f"{dia_semana} {dt.day:02d} de {mes_nombre} de {dt.year}"
-    except:
-        return fecha_str
-
-def get_imagen_plantilla(tipo_evento):
-    """
-    Busca en la carpeta local 'assets' un archivo que coincida EXACTAMENTE 
-    con el nombre del TIPO. Prueba extensiones comunes.
-    Ej: TIPO='Volanteo' -> busca assets/Volanteo.png, assets/Volanteo.jpg...
-    """
-    if not tipo_evento:
-        tipo_evento = "default"
-
-    nombre_archivo = str(tipo_evento).strip()
-    extensiones = [".png", ".jpg", ".jpeg", ".webp"]
-    carpeta_assets = "assets"
-
-    # 1. Buscar coincidencia exacta en assets
-    for ext in extensiones:
-        ruta_completa = os.path.join(carpeta_assets, f"{nombre_archivo}{ext}")
-        if os.path.exists(ruta_completa):
-            return ruta_completa
-    
-    # 2. Si no encuentra la específica, busca una 'default' local
-    for ext in extensiones:
-        ruta_default = os.path.join(carpeta_assets, f"default{ext}")
-        if os.path.exists(ruta_default):
-            return ruta_default
-
-    # 3. Fallback online (por si no existe carpeta assets o imagen default)
-    return "https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png"
-
 def normalizar_texto(texto):
+    """Quita acentos y pasa a minúsculas: 'Promoción' -> 'promocion'"""
     if not isinstance(texto, str): return str(texto).lower()
     texto = unicodedata.normalize('NFD', texto)
     return ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower()
 
+def formatear_fecha_larga(fecha_str):
+    if not fecha_str: return "Fecha pendiente"
+    dias = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
+    meses = {1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"}
+    try:
+        dt = datetime.strptime(fecha_str, "%Y-%m-%d")
+        return f"{dias[dt.weekday()]} {dt.day:02d} de {meses[dt.month]} de {dt.year}"
+    except: return fecha_str
+
+def get_imagen_plantilla(tipo_evento):
+    """
+    Busca en la carpeta 'assets' ignorando mayúsculas y acentos.
+    Compara: normalizar_texto(TIPO) == normalizar_texto(NOMBRE_ARCHIVO)
+    """
+    carpeta_assets = "assets"
+    
+    # URL por defecto si no hay assets locales o falla todo
+    url_default = "https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png"
+
+    if not tipo_evento:
+        tipo_evento = "default"
+
+    # 1. Verificamos si existe la carpeta
+    if not os.path.exists(carpeta_assets):
+        return url_default
+
+    # 2. Normalizamos el tipo buscado (ej: "Activación" -> "activacion")
+    tipo_buscado = normalizar_texto(str(tipo_evento))
+
+    # 3. Listamos los archivos en la carpeta y buscamos coincidencia
+    try:
+        archivos_en_carpeta = os.listdir(carpeta_assets)
+        for archivo in archivos_en_carpeta:
+            # Separamos nombre de extensión (ej: "Activación.png" -> "Activación")
+            nombre_base = os.path.splitext(archivo)[0]
+            # Normalizamos el nombre del archivo (ej: "Activación" -> "activacion")
+            nombre_archivo_norm = normalizar_texto(nombre_base)
+
+            if tipo_buscado == nombre_archivo_norm:
+                return os.path.join(carpeta_assets, archivo)
+        
+        # 4. Si no encuentra exacta, busca si hay un "default" local
+        for archivo in archivos_en_carpeta:
+            if "default" in normalizar_texto(archivo):
+                return os.path.join(carpeta_assets, archivo)
+                
+    except Exception as e:
+        print(f"Error buscando assets: {e}")
+        
+    return url_default
+
 def cargar_usuarios():
     if not os.path.exists(FILES_DB):
-        default_db = {
-            "admin": {
-                "password": MASTER_ADMIN_PASS,
-                "role": "admin",
-                "plazas": SUCURSALES_OFICIALES
-            }
-        }
-        with open(FILES_DB, 'w') as f:
-            json.dump(default_db, f)
+        default_db = {"admin": {"password": MASTER_ADMIN_PASS, "role": "admin", "plazas": SUCURSALES_OFICIALES}}
+        with open(FILES_DB, 'w') as f: json.dump(default_db, f)
         return default_db
-    
-    with open(FILES_DB, 'r') as f:
-        return json.load(f)
+    with open(FILES_DB, 'r') as f: return json.load(f)
 
 def guardar_usuarios(db):
-    with open(FILES_DB, 'w') as f:
-        json.dump(db, f)
+    with open(FILES_DB, 'w') as f: json.dump(db, f)
 
 def registrar_historial(accion, usuario, sucursal, detalles):
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    nuevo_registro = {
-        "Fecha": fecha, "Usuario": usuario, "Sucursal": sucursal,
-        "Acción": accion, "Detalles": detalles
-    }
+    nuevo_registro = {"Fecha": fecha, "Usuario": usuario, "Sucursal": sucursal, "Acción": accion, "Detalles": detalles}
     df_new = pd.DataFrame([nuevo_registro])
-    if not os.path.exists(HISTORIAL_FILE):
-        df_new.to_csv(HISTORIAL_FILE, index=False)
-    else:
-        df_new.to_csv(HISTORIAL_FILE, mode='a', header=False, index=False)
+    if not os.path.exists(HISTORIAL_FILE): df_new.to_csv(HISTORIAL_FILE, index=False)
+    else: df_new.to_csv(HISTORIAL_FILE, mode='a', header=False, index=False)
 
 # ==============================================================================
 # 3. FUNCIONES AIRTABLE
@@ -138,8 +127,7 @@ def get_bases():
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            return {b['name']: b['id'] for b in r.json().get('bases', [])}
+        if r.status_code == 200: return {b['name']: b['id'] for b in r.json().get('bases', [])}
     except: pass
     return {}
 
@@ -149,47 +137,36 @@ def get_tables(base_id):
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            return {t['name']: t['id'] for t in r.json().get('tables', [])}
+        if r.status_code == 200: return {t['name']: t['id'] for t in r.json().get('tables', [])}
     except: pass
     return {}
 
 def get_records(base_id, table_id, year, plaza):
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
-    
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code != 200:
-            st.error(f"Error conectando a Airtable: {r.status_code}")
-            return []
+        if r.status_code != 200: return []
         data = r.json().get('records', [])
-    except Exception as e:
-        st.error(f"Error de conexión: {str(e)}")
-        return []
+    except: return []
 
     filtered = []
     plaza_norm = normalizar_texto(plaza)
-
     for rec in data:
         fields = rec.get('fields', {})
         fecha_dato = fields.get('Fecha')
         match_year = False
-        if fecha_dato and str(fecha_dato).startswith(str(year)):
-            match_year = True
-            
+        if fecha_dato and str(fecha_dato).startswith(str(year)): match_year = True
+        
         suc_dato = fields.get('Sucursal')
         match_plaza = False
         if suc_dato:
-            if isinstance(suc_dato, list): val_suc = str(suc_dato[0])
-            else: val_suc = str(suc_dato)
+            val_suc = str(suc_dato[0]) if isinstance(suc_dato, list) else str(suc_dato)
             if normalizar_texto(val_suc) == plaza_norm: match_plaza = True
         
-        if match_year and match_plaza:
-            filtered.append(rec)
+        if match_year and match_plaza: filtered.append(rec)
             
-    try:
-        filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
+    try: filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     except: pass
     return filtered
 
@@ -216,20 +193,15 @@ if 'selected_event' not in st.session_state: st.session_state.selected_event = N
 if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
     col_izq, col_centro, col_der = st.columns([1, 2, 1])
-    
     with col_centro:
         st.image("https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png", width=200)
         st.markdown("### 🔐 Acceso al Sistema")
-        
         with st.form("login_form"):
             usuario_input = st.text_input("👤 Usuario:")
             pass_input = st.text_input("🔑 Contraseña:", type="password")
-            btn_ingresar = st.form_submit_button("Ingresar", use_container_width=True)
-            
-            if btn_ingresar:
+            if st.form_submit_button("Ingresar", use_container_width=True):
                 users_db = cargar_usuarios()
                 user_data = users_db.get(usuario_input)
-
                 if user_data and user_data['password'] == pass_input:
                     st.session_state.logged_in = True
                     st.session_state.user_role = user_data.get('role', 'user')
@@ -237,47 +209,33 @@ if not st.session_state.logged_in:
                     st.session_state.allowed_plazas = user_data.get('plazas', [])
                     registrar_historial("Login", usuario_input, "Sistema", "Inicio de sesión exitoso")
                     st.rerun()
-                else:
-                    st.error("Credenciales incorrectas.")
+                else: st.error("Credenciales incorrectas.")
 
 # ==============================================================================
 # 6. APP PRINCIPAL
 # ==============================================================================
 else:
-    # --- SIDEBAR ---
     with st.sidebar:
         st.header(f"Hola, {st.session_state.user_name}")
         st.caption(f"Rol: {st.session_state.user_role.upper()}")
         st.divider()
         st.subheader("📅 Configuración")
-        
-        # Selección Base/Mesa
         bases_map = get_bases()
         if not bases_map: st.stop()
         base_name = st.selectbox("Base:", list(bases_map.keys()))
         base_id = bases_map[base_name]
-
         tables_map = get_tables(base_id)
-        table_id = None
-        if tables_map:
-            table_name = st.selectbox("Mes:", list(tables_map.keys()))
-            table_id = tables_map[table_name]
+        table_id = tables_map[st.selectbox("Mes:", list(tables_map.keys()))] if tables_map else None
         
-        # Selector de Plaza (Filtrado por permisos)
         plazas_permitidas = st.session_state.allowed_plazas
-        if not plazas_permitidas:
-            st.error("Sin plazas asignadas.")
-            sel_plaza = None
+        if not plazas_permitidas: st.error("Sin plazas asignadas.")
         else:
             sel_plaza = st.selectbox("📍 Plaza:", plazas_permitidas)
             st.session_state.sucursal_actual = sel_plaza
 
-        # Año Fijo
-        sel_year = YEAR_ACTUAL
-
         if sel_plaza and st.button("🔄 ACTUALIZAR EVENTOS", type="primary", use_container_width=True):
             st.session_state.selected_event = None
-            st.session_state.search_results = get_records(base_id, table_id, sel_year, sel_plaza)
+            st.session_state.search_results = get_records(base_id, table_id, YEAR_ACTUAL, sel_plaza)
             st.session_state.current_base_id = base_id
             st.session_state.current_table_id = table_id
             st.session_state.current_plaza_view = sel_plaza
@@ -287,11 +245,8 @@ else:
             st.session_state.logged_in = False
             st.rerun()
 
-    # --- PESTAÑAS ADMIN / USER ---
     if st.session_state.user_role == "admin":
         tab_main, tab_users, tab_hist = st.tabs(["📂 Gestión de Eventos", "👥 Usuarios", "📜 Historial"])
-        
-        # --- TAB USUARIOS ---
         with tab_users:
             st.subheader("Gestión de Accesos")
             users_db = cargar_usuarios()
@@ -308,75 +263,46 @@ else:
                         st.success(f"Usuario {new_user} guardado.")
                         st.rerun()
             st.dataframe(pd.DataFrame([{"User":u, "Rol":d['role'], "Plazas":d['plazas']} for u,d in users_db.items()]), use_container_width=True)
-
-        # --- TAB HISTORIAL ---
         with tab_hist:
-            if os.path.exists(HISTORIAL_FILE):
-                st.dataframe(pd.read_csv(HISTORIAL_FILE).sort_values("Fecha", ascending=False), use_container_width=True)
+            if os.path.exists(HISTORIAL_FILE): st.dataframe(pd.read_csv(HISTORIAL_FILE).sort_values("Fecha", ascending=False), use_container_width=True)
             else: st.info("Vacío")
-        
         main_area = tab_main
-    else:
-        main_area = st.container()
+    else: main_area = st.container()
 
-    # --- ÁREA PRINCIPAL ---
     with main_area:
         st.title(f"Gestión: {st.session_state.get('current_plaza_view', sel_plaza)}")
 
-        # VISTA A: LISTADO DE EVENTOS (2 COLUMNAS + ASSETS)
+        # VISTA A: LISTADO (2 COLUMNAS)
         if st.session_state.selected_event is None:
             if 'search_results' in st.session_state:
                 recs = st.session_state.search_results
                 if recs:
                     for r in recs:
                         f = r['fields']
-                        
-                        # Contenedor estilo tarjeta
                         with st.expander(f"{f.get('Fecha')} - {f.get('Tipo', 'Evento')}", expanded=True):
-                            
                             col_img, col_data = st.columns([1, 2.5])
-                            
-                            # --- COLUMNA 1: IMAGEN DESDE ASSETS ---
                             with col_img:
-                                # Busca en assets/NombreTipo.png (o jpg/jpeg)
                                 img_path = get_imagen_plantilla(f.get('Tipo'))
                                 st.image(img_path, use_container_width=True)
-                                
-                            # --- COLUMNA 2: DATOS DEL EVENTO ---
                             with col_data:
                                 fecha_larga = formatear_fecha_larga(f.get('Fecha'))
                                 st.markdown(f"### 🗓️ {fecha_larga}")
-                                
-                                st.markdown(f"""
-                                **Tipo:** {f.get('Tipo', '--')}  
-                                **📍 Punto:** {f.get('Punto de reunion', 'N/A')}  
-                                **🛣️ Ruta:** {f.get('Ruta a seguir', 'N/A')}  
-                                **🏙️ Municipio:** {f.get('Municipio', 'N/A')}  
-                                **⏰ Hora:** {f.get('Hora', '--')}
-                                """)
-                                
+                                st.markdown(f"**Tipo:** {f.get('Tipo', '--')} \n **📍 Punto:** {f.get('Punto de reunion', 'N/A')} \n **🏙️ Municipio:** {f.get('Municipio', 'N/A')} \n **⏰ Hora:** {f.get('Hora', '--')}")
                                 c_btn_1, c_btn_2 = st.columns(2)
                                 with c_btn_1:
                                     if st.button("📸 SUBIR EVIDENCIA", key=f"btn_{r['id']}", type="primary", use_container_width=True):
                                         st.session_state.selected_event = r
                                         st.rerun()
                                 with c_btn_2:
-                                    # Botón Reagendado (Visual)
                                     if st.button("⚠️ EVENTO REAGENDADO", key=f"re_{r['id']}", use_container_width=True):
-                                        st.warning("Funcionalidad de reagendar pendiente de conectar con Airtable.")
-                                        registrar_historial("Click Reagendar", st.session_state.user_name, st.session_state.sucursal_actual, f"Evento {f.get('Fecha')}")
+                                        st.warning("Pendiente de conectar.")
+                else: st.info("No hay eventos.")
+            else: st.info("👈 Actualizar eventos.")
 
-                else:
-                    if st.session_state.get('sucursal_actual'):
-                        st.info(f"No hay eventos programados en {st.session_state.sucursal_actual}.")
-            else:
-                st.info("👈 Presiona 'ACTUALIZAR EVENTOS' en la barra lateral.")
-
-        # VISTA B: FORMULARIO DE CARGA
+        # VISTA B: CARGAR EVIDENCIA
         else:
             evt = st.session_state.selected_event
             fields = evt['fields']
-            
             if st.button("⬅️ VOLVER", type="secondary"):
                 st.session_state.selected_event = None
                 st.rerun()
@@ -386,46 +312,49 @@ else:
             
             with st.form("evidence_form"):
                 uploads = {}
-
+                
                 # 1. FOTO EQUIPO
                 st.markdown("#### 1. Foto de Equipo")
                 c1, c2 = st.columns([3,1])
-                uploads['Foto de equipo'] = c1.file_uploader("Subir imagen", type=['jpg','png','jpeg'], key="u_eq")
+                uploads['Foto de equipo'] = c1.file_uploader("Imagen", type=['jpg','png','jpeg'], key="u_eq")
                 if fields.get('Foto de equipo'): c2.image(fields['Foto de equipo'][0]['url'], width=100)
                 
-                # 2. ACTIVIDAD (GRID)
+                # 2. ACTIVIDAD (GRID CORREGIDO)
                 st.markdown("#### 2. Fotos de Actividad")
                 grid = [("Foto 01","Foto 02"), ("Foto 03","Foto 04"), ("Foto 05","Foto 06"), ("Foto 07",None)]
                 for l_izq, l_der in grid:
                     col_a, col_b = st.columns(2)
                     with col_a:
                         uploads[l_izq] = st.file_uploader(l_izq, type=['jpg','png'], key=f"k_{l_izq}", label_visibility="collapsed")
+                        # --- CORRECCION: Mostrar imagen existente ---
+                        if fields.get(l_izq): st.image(fields[l_izq][0]['url'], width=100)
+                    
                     if l_der:
                         with col_b:
                             uploads[l_der] = st.file_uploader(l_der, type=['jpg','png'], key=f"k_{l_der}", label_visibility="collapsed")
-                
+                            # --- CORRECCION: Mostrar imagen existente ---
+                            if fields.get(l_der): st.image(fields[l_der][0]['url'], width=100)
+
                 st.markdown("---")
                 
-                # 3. REPORTE FIRMADO (IMAGEN)
+                # 3. REPORTE FIRMADO
                 st.markdown("#### 3. Reporte Firmado")
                 c3, c4 = st.columns([3,1])
-                uploads['Reporte firmado'] = c3.file_uploader("Foto del Reporte", type=['jpg','png','jpeg'], key="u_rep")
+                uploads['Reporte firmado'] = c3.file_uploader("Foto Reporte", type=['jpg','png','jpeg'], key="u_rep")
                 if fields.get('Reporte firmado'): c4.image(fields['Reporte firmado'][0]['url'], width=100)
 
-                # 4. LISTA ASISTENCIA (IMAGEN - CONDICIONAL)
+                # 4. LISTA ASISTENCIA
                 if fields.get('Tipo') == "Actividad en Sucursal":
                     st.markdown("---")
                     st.markdown("#### 4. Lista de Asistencia")
                     c5, c6 = st.columns([3,1])
-                    uploads['Lista de asistencia'] = c5.file_uploader("Foto de Lista", type=['jpg','png','jpeg'], key="u_lst")
+                    uploads['Lista de asistencia'] = c5.file_uploader("Foto Lista", type=['jpg','png','jpeg'], key="u_lst")
                     if fields.get('Lista de asistencia'): c6.image(fields['Lista de asistencia'][0]['url'], width=100)
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
-                    # --- PROCESO DE SUBIDA ---
                     files_to = {k:v for k,v in uploads.items() if v}
-                    if not files_to:
-                        st.warning("Nada para subir.")
+                    if not files_to: st.warning("Nada para subir.")
                     else:
                         prog = st.progress(0)
                         upd_dict = {}
@@ -435,7 +364,6 @@ else:
                                 res = cloudinary.uploader.upload(f_obj)
                                 upd_dict[k] = [{"url": res['secure_url']}]
                                 prog.progress((i+1)/(tot+1))
-                            
                             if upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], upd_dict):
                                 st.success("Guardado Exitosamente")
                                 st.session_state.selected_event['fields'].update(upd_dict)
