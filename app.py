@@ -149,9 +149,6 @@ def airtable_request(method, url, data=None, params=None):
         # --- DEBUG VISUAL SI FALLA ---
         if r.status_code not in [200, 201, 202]:
             st.error(f"⚠️ ERROR AIRTABLE ({r.status_code}): {r.text}")
-            # Si el error es de campos desconocidos, ayuda al usuario
-            if "UNKNOWN_FIELD_NAME" in r.text:
-                st.warning(f"Revisa los nombres de las columnas. Airtable dice que no encuentra algún campo de los que enviamos: {json.dumps(data)}")
         return r
     except Exception as e:
         st.error(f"❌ Error de Conexión Python: {str(e)}")
@@ -193,24 +190,33 @@ def get_all_pending_requests():
                     pending_list.append(rec)
     return pending_list
 
-# --- LÓGICA DE RESPALDO Y BLOQUEO ---
+# --- LÓGICA DE RESPALDO BLINDADA (DETECTA ADJUNTOS AUTOMATICAMENTE) ---
 def crear_respaldo_evento(fields_original):
-    """Copia campos a la tabla de respaldo, LIMPIANDO DATOS VACÍOS para evitar errores 422"""
     campos_copiar = ["Tipo", "Fecha", "Hora", "Sucursal", "Seccion", "Ruta a seguir", "Punto de reunion", "Municipio", "Cantidad", "AM Responsable", "DM Responsable", "Teléfono AM", "Teléfono DM", "Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]
-    new_data = {}
     
+    new_data = {}
     for k in campos_copiar:
         val = fields_original.get(k)
-        # ⚠️ IMPORTANTE: Solo agregamos al payload si tiene valor. Airtable odia recibir {"Campo": None}
+        
+        # 1. Ignorar vacíos para no enviar None (evita error 422)
         if val not in [None, "", []]:
-            # Procesar adjuntos para formato Airtable
-            if isinstance(val, list) and len(val) > 0 and 'url' in val[0]:
+            
+            # 2. DETECCIÓN AUTOMÁTICA DE ADJUNTOS
+            # Si es una lista y el primer elemento es un dict con 'url', es un adjunto.
+            is_attachment = False
+            if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict) and 'url' in val[0]:
+                is_attachment = True
+            
+            if is_attachment:
+                # Enviar como objeto de archivo
                 new_data[k] = [{'url': img['url']} for img in val]
             else:
-                new_data[k] = val
-    
-    # Debug: Mostrar qué se está enviando si falla
-    # st.write("Enviando a respaldo:", new_data) 
+                # 3. MANEJO DE TEXTO (Forzar todo lo demás a string)
+                if isinstance(val, list):
+                    # Si es lista de texto (ej. Select múltiple), unir con comas
+                    new_data[k] = ", ".join(str(x) for x in val)
+                else:
+                    new_data[k] = str(val)
     
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{BACKUP_TABLE_ID}"
     return airtable_request("POST", url, {"fields": new_data})
@@ -230,7 +236,6 @@ def aprobar_desbloqueo_admin(base_id, table_id, record_full_data):
         if resp_update and resp_update.status_code == 200: return True, "Éxito"
         else: return False, f"Respaldo OK, pero falló desbloqueo original."
     else:
-        # El error ya se muestra en pantalla gracias a airtable_request
         return False, "Fallo al crear respaldo (ver error arriba)"
 
 # --- GESTIÓN USUARIOS Y CONFIG ---
@@ -283,6 +288,8 @@ def upload_evidence_to_airtable(base_id, table_id, record_id, updates):
 def delete_field_from_airtable(base_id, table_id, record_id, field):
     r = airtable_request("PATCH", f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}", {"fields": {field: None}})
     return r.status_code == 200 if r else False
+
+def registrar_historial(accion, usuario, sucursal, detalles): pass 
 
 # ==============================================================================
 # 4. SESIÓN
@@ -405,7 +412,7 @@ else:
                                     if ok:
                                         st.success("¡Aprobado con éxito!"); st.rerun()
                                     else:
-                                        # Aquí el error ya se imprimió en st.error dentro de airtable_request, pero mostramos esto por si acaso
+                                        # Aquí el error ya se imprimió en st.error dentro de airtable_request
                                         st.error(f"Fallo final: {msg}")
 
         main_area = tm
@@ -484,7 +491,7 @@ else:
                         with st.spinner("Enviando..."):
                             resp = solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'])
                             if resp and resp.status_code==200: st.success("Enviado."); evt['fields']['Estado_Bloqueo']='Solicitado'; st.rerun()
-                            else: pass # Error ya mostrado por airtable_request
+                            else: pass 
 
             def render_cell(col, k, label):
                 with col:
