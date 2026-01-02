@@ -19,53 +19,94 @@ st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
-    
-    /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
-    /* Aquí mostramos el lightlogo.png y ocultamos el darklogo.png */
-    .logo-light { display: block; }
-    .logo-dark { display: none; }
-
-    /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
-    /* Aquí invertimos: Ocultamos light, Mostramos dark */
-    
-    /* Caso 1: Detectado por Sistema Operativo (Móvil) */
-    @media (prefers-color-scheme: dark) {
-        .logo-light { display: none !important; }
-        .logo-dark { display: block !important; }
+    /* --- 1. TEMA GENERAL --- */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        /* Streamlit maneja el fondo */
     }
 
-    /* Caso 2: Detectado por Configuración de Streamlit */
-    [data-theme="dark"] .logo-light { display: none !important; }
-    [data-theme="dark"] .logo-dark { display: block !important; }
+    /* --- 2. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
+    
+    /* DEFAULT (Light Mode / Fondo Blanco) -> Muestra DARKLOGO (Contraste), Oculta Light */
+    .logo-light { display: none; }
+    .logo-dark { display: block; }
 
+    /* MODO OSCURO (Dark Mode / Fondo Negro) -> Muestra LIGHTLOGO (Contraste), Oculta Dark */
+    @media (prefers-color-scheme: dark) {
+        .logo-light { display: block !important; }
+        .logo-dark { display: none !important; }
+    }
+    [data-theme="dark"] .logo-light { display: block !important; }
+    [data-theme="dark"] .logo-dark { display: none !important; }
 
-    /* --- 2. RESTO DE ESTILOS (BOTONES, EXPANDERS, ETC) --- */
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {}
-
-    /* Expanders Negros */
-    .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
-    .streamlit-expanderContent { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #333333 !important; border-top: none !important; }
+    /* --- 3. EXPANDERS (FONDO NEGRO / TEXTO BLANCO) --- */
+    .streamlit-expanderHeader {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+        border: 1px solid #333333 !important;
+        border-radius: 8px !important;
+    }
+    .streamlit-expanderContent {
+        background-color: #1a1a1a !important;
+        color: #ffffff !important;
+        border: 1px solid #333333 !important;
+        border-top: none !important;
+    }
+    /* Forzar texto blanco dentro de expanders */
     .streamlit-expanderHeader p, .streamlit-expanderHeader span, .streamlit-expanderHeader svg,
     .streamlit-expanderContent p, .streamlit-expanderContent span, .streamlit-expanderContent h1, 
-    .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent li, .streamlit-expanderContent label { color: #ffffff !important; fill: #ffffff !important; }
+    .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent li, .streamlit-expanderContent label, 
+    .streamlit-expanderContent div {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
 
-    /* Botones */
-    .stButton button[kind="primary"] { background-color: #00c853 !important; border: none !important; color: #ffffff !important; font-weight: 700 !important; }
+    /* --- 4. BOTONES --- */
+    /* Primario (Verde) */
+    .stButton button[kind="primary"] {
+        background-color: #00c853 !important;
+        border: none !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
     .stButton button[kind="primary"]:hover { background-color: #009624 !important; }
     .stButton button[kind="primary"] p { color: #ffffff !important; }
-    .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
+
+    /* Secundario (Rojo) */
+    .stButton button[kind="secondary"] {
+        background-color: #dc2626 !important;
+        border: none !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
     .stButton button[kind="secondary"]:hover { background-color: #b91c1c !important; }
     .stButton button[kind="secondary"] p { color: #ffffff !important; }
-    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button { background-color: #00b0ff !important; color: white !important; border: none !important; }
-    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button:hover { background-color: #0091ea !important; }
+
+    /* Botón Reagendar (Celeste) - Detectado por posición */
+    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button {
+        background-color: #00b0ff !important;
+        color: white !important;
+        border: none !important;
+    }
+    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button:hover {
+        background-color: #0091ea !important;
+    }
     [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button p { color: white !important; }
 
-    /* Uploader */
+    /* --- 5. UPLOADER --- */
     [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
-    [data-testid="stFileUploader"] section { min-height: 0px !important; padding: 10px !important; background-color: transparent !important; border: 2px dashed #00b0ff !important; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-    [data-testid="stFileUploader"] section::after { content: "➕"; font-size: 32px; color: #00b0ff !important; display: block; }
+    [data-testid="stFileUploader"] section {
+        min-height: 0px !important;
+        padding: 10px !important;
+        background-color: transparent !important;
+        border: 2px dashed #00b0ff !important;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+    }
+    [data-testid="stFileUploader"] section::after {
+        content: "➕"; font-size: 32px; color: #00b0ff !important; display: block;
+    }
 
+    /* --- 6. ELEMENTOS OCULTOS --- */
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
     img { max-width: 100%; }
     .caption-text { font-size: 1.1rem !important; font-weight: 700 !important; margin-bottom: 0.5rem; }
@@ -81,9 +122,9 @@ CLOUDINARY_CONFIG = {
 AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87ad1f2d71bfe853ce9783"
 
 # --- ⚠️ CONFIGURACIÓN DE LA BASE MAESTRA ---
-ADMIN_BASE_ID = "appRF7jHcmBJZA1px"       # ID Base: Provident Event Photo Uploader
-USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"      # ID Tabla: Usuarios
-CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"     # ID Tabla: Configuracion
+ADMIN_BASE_ID = "appRF7jHcmBJZA1px"       # ID Base
+USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"      # ID Tabla Usuarios
+CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"     # ID Tabla Configuracion
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
@@ -131,7 +172,7 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
-# --- LOGO DINÁMICO (BASE64) ---
+# --- LOGO DINÁMICO ---
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
@@ -144,8 +185,6 @@ def render_logo_dinamico(is_banner=False):
     if os.path.exists(light_path) and os.path.exists(dark_path):
         b64_light = get_base64_image(light_path)
         b64_dark = get_base64_image(dark_path)
-        
-        # Inyectamos AMBOS logos, el CSS se encarga de mostrar uno y ocultar el otro
         html = f"""
         <div style="text-align: center;">
             <img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}">
@@ -190,8 +229,7 @@ def api_get_all_bases():
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            return {b['name']: b['id'] for b in r.json().get('bases', [])}
+        if r.status_code == 200: return {b['name']: b['id'] for b in r.json().get('bases', [])}
     except: pass
     return {}
 
@@ -200,8 +238,7 @@ def api_get_all_tables(base_id):
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            return {t['name']: t['id'] for t in r.json().get('tables', [])}
+        if r.status_code == 200: return {t['name']: t['id'] for t in r.json().get('tables', [])}
     except: pass
     return {}
 
@@ -218,22 +255,15 @@ def cargar_usuarios_airtable():
                 if usuario:
                     plazas_raw = f.get('Plazas', [])
                     plazas = [p.strip() for p in plazas_raw.split(',')] if isinstance(plazas_raw, str) else plazas_raw
-                    users_dict[usuario] = {
-                        "id_record": rec['id'],
-                        "password": f.get('Password', ''),
-                        "role": f.get('Role', 'user'),
-                        "plazas": plazas
-                    }
+                    users_dict[usuario] = {"id_record": rec['id'], "password": f.get('Password', ''), "role": f.get('Role', 'user'), "plazas": plazas}
     except: pass
     return users_dict
 
 def crear_actualizar_usuario_airtable(usuario, password, role, plazas, record_id=None):
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
     fields = {"Usuario": usuario, "Password": password, "Role": role, "Plazas": plazas}
-    if record_id:
-        r = requests.patch(f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}/{record_id}", json={"fields": fields}, headers=headers)
-    else:
-        r = requests.post(f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}", json={"fields": fields}, headers=headers)
+    if record_id: r = requests.patch(f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}/{record_id}", json={"fields": fields}, headers=headers)
+    else: r = requests.post(f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}", json={"fields": fields}, headers=headers)
     return r.status_code == 200
 
 def eliminar_usuario_airtable(record_id):
@@ -251,8 +281,7 @@ def cargar_config_airtable():
             for rec in r.json().get('records', []):
                 f = rec['fields']
                 if f.get('Activo'):
-                    b_name = f.get('Nombre_Base'); b_id = f.get('ID_Base')
-                    t_name = f.get('Nombre_Tabla'); t_id = f.get('ID_Tabla')
+                    b_name = f.get('Nombre_Base'); b_id = f.get('ID_Base'); t_name = f.get('Nombre_Tabla'); t_id = f.get('ID_Tabla')
                     if b_name and b_id:
                         config["bases"][b_name] = b_id
                         if t_name and t_id:
@@ -275,13 +304,11 @@ def get_records(base_id, table_id, year, plaza):
         if r.status_code != 200: return []
         data = r.json().get('records', [])
     except: return []
-    filtered = []
-    plaza_norm = normalizar_texto_simple(plaza)
+    filtered = []; plaza_norm = normalizar_texto_simple(plaza)
     for rec in data:
         f = rec.get('fields', {})
         if str(f.get('Fecha','')).startswith(str(year)):
-            p_val = f.get('Sucursal')
-            p_str = p_val[0] if isinstance(p_val, list) else str(p_val)
+            p_val = f.get('Sucursal'); p_str = p_val[0] if isinstance(p_val, list) else str(p_val)
             if normalizar_texto_simple(p_str) == plaza_norm: filtered.append(rec)
     filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     return filtered
@@ -304,8 +331,7 @@ def delete_field_from_airtable(base_id, table_id, record_id, field):
     r = requests.patch(url, json={"fields": {field: None}}, headers=headers)
     return r.status_code == 200
 
-def registrar_historial(accion, usuario, sucursal, detalles):
-    pass 
+def registrar_historial(accion, usuario, sucursal, detalles): pass 
 
 # ==============================================================================
 # 4. GESTIÓN DE SESIÓN
@@ -319,7 +345,7 @@ if 'selected_event' not in st.session_state: st.session_state.selected_event = N
 if 'rescheduling_event' not in st.session_state: st.session_state.rescheduling_event = None
 
 # ==============================================================================
-# 5. PANTALLA DE LOGIN
+# 5. LOGIN
 # ==============================================================================
 if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -406,31 +432,21 @@ else:
 
         with tab_config_db:
             st.subheader("Agregar Configuración de Visibilidad")
-            st.info("El sistema consultará tus Bases reales en Airtable.")
-            with st.spinner("Obteniendo Bases de Airtable..."):
+            with st.spinner("Conectando con Airtable..."):
                 real_bases = api_get_all_bases()
-            if not real_bases: st.error("No se pudieron obtener bases. Revisa tu Token.")
+            if not real_bases: st.error("Error al leer bases.")
             else:
-                selected_base_name = st.selectbox("Selecciona la Base:", list(real_bases.keys()))
-                selected_base_id = real_bases[selected_base_name]
-                with st.spinner(f"Obteniendo tablas de {selected_base_name}..."):
-                    real_tables = api_get_all_tables(selected_base_id)
-                if not real_tables: st.warning("Esta base no tiene tablas o no se pudieron leer.")
+                sel_b_name = st.selectbox("Base:", list(real_bases.keys())); sel_b_id = real_bases[sel_b_name]
+                with st.spinner(f"Leyendo tablas de {sel_b_name}..."): real_tables = api_get_all_tables(sel_b_id)
+                if not real_tables: st.warning("Sin tablas.")
                 else:
-                    st.markdown(f"**Tablas disponibles en {selected_base_name}:**")
-                    selected_tables_names = st.multiselect("Selecciona las tablas (Meses) a habilitar:", list(real_tables.keys()))
+                    sel_tables = st.multiselect("Tablas a habilitar:", list(real_tables.keys()))
                     if st.button("💾 GUARDAR CONFIGURACIÓN", type="primary"):
-                        if selected_tables_names:
-                            count = 0; progress_text = st.empty()
-                            for t_name in selected_tables_names:
-                                t_id = real_tables[t_name]
-                                guardar_config_airtable(selected_base_name, selected_base_id, t_name, t_id)
-                                count += 1
-                                progress_text.text(f"Guardando {t_name}...")
-                            st.success(f"✅ Se agregaron {count} tablas a la configuración exitosamente."); st.rerun()
-                        else: st.warning("Selecciona al menos una tabla.")
-            st.divider(); st.markdown("#### Configuración Actual Guardada:"); st.json(cargar_config_airtable())
-
+                        if sel_tables:
+                            for t in sel_tables: guardar_config_airtable(sel_b_name, sel_b_id, t, real_tables[t])
+                            st.success("Guardado."); st.rerun()
+                        else: st.warning("Elige tablas.")
+            st.divider(); st.markdown("#### Configuración Guardada:"); st.json(cargar_config_airtable())
         main_area = tab_main
     else: main_area = st.container()
 
@@ -446,12 +462,17 @@ else:
                     for r in recs:
                         f = r['fields']; ya_tiene = check_evidencia_completa(f)
                         with st.expander(f"{f.get('Fecha')} | {f.get('Tipo')}", expanded=True):
-                            c1, c2 = st.columns([1, 2.5]); c1.image(get_imagen_plantilla(f.get('Tipo')), use_container_width=True)
-                            c2.markdown(f"**📍 {obtener_ubicacion_corta(f)}**\n\n{formatear_fecha_larga(f.get('Fecha'))} | {f.get('Hora')}")
-                            cb1, cb2 = st.columns(2)
-                            if cb1.button("📸 SUBIR EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True): st.session_state.selected_event=r; st.rerun()
-                            if not ya_tiene:
-                                if cb2.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True): st.session_state.rescheduling_event=r; st.rerun()
+                            c1, c2 = st.columns([1, 2.5])
+                            with c1: st.image(get_imagen_plantilla(f.get('Tipo')), use_container_width=True)
+                            with c2:
+                                # AQUI REINCORPORAMOS EL BLOQUE DE DETALLES
+                                st.markdown(f"### 🗓️ {formatear_fecha_larga(f.get('Fecha'))}")
+                                st.markdown(f"**📌 Tipo:** {f.get('Tipo','--')}\n**📍 Punto:** {f.get('Punto de reunion','--')}\n**🛣️ Ruta:** {f.get('Ruta a seguir','--')}\n**🏙️ Muni:** {f.get('Municipio','--')}\n**⏰ Hora:** {f.get('Hora','--')}")
+                                st.markdown("<br>",unsafe_allow_html=True)
+                                cb1, cb2 = st.columns(2)
+                                if cb1.button("📸 SUBIR EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True): st.session_state.selected_event=r; st.rerun()
+                                if not ya_tiene:
+                                    if cb2.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True): st.session_state.rescheduling_event=r; st.rerun()
                 else: st.info("No hay eventos.")
             else: st.info("Selecciona base y mes.")
 
