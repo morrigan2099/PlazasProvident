@@ -19,61 +19,31 @@ st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* --- 1. LOGOTIPO DINÁMICO (LÓGICA CORRECTA DE CONTRASTE) --- */
-    
-    /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
-    /* Muestra DARKLOGO (para que contraste), Oculta LIGHTLOGO */
+    /* --- LOGO DINÁMICO --- */
     .logo-light { display: none; }
     .logo-dark { display: block; }
-
-    /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
-    /* Muestra LIGHTLOGO (para que contraste), Oculta DARKLOGO */
-    
-    /* Caso 1: Detectado por Sistema Operativo (Móvil) */
     @media (prefers-color-scheme: dark) {
         .logo-light { display: block !important; }
         .logo-dark { display: none !important; }
     }
-
-    /* Caso 2: Detectado por Configuración de Streamlit */
     [data-theme="dark"] .logo-light { display: block !important; }
     [data-theme="dark"] .logo-dark { display: none !important; }
 
-
-    /* --- 2. ESTILOS GENERALES --- */
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {}
-
-    /* Expanders Negros (Alto Contraste) */
+    /* --- ESTILOS GENERALES --- */
     .streamlit-expanderHeader { background-color: #000000 !important; color: #ffffff !important; border: 1px solid #333333 !important; border-radius: 8px !important; }
     .streamlit-expanderContent { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #333333 !important; border-top: none !important; }
-    .streamlit-expanderHeader p, .streamlit-expanderHeader span, .streamlit-expanderHeader svg,
-    .streamlit-expanderContent p, .streamlit-expanderContent span, .streamlit-expanderContent h1, 
-    .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent li, .streamlit-expanderContent label,
-    .streamlit-expanderContent div { color: #ffffff !important; fill: #ffffff !important; }
-
-    /* Botones */
+    .streamlit-expanderHeader p, .streamlit-expanderHeader span, .streamlit-expanderContent p, .streamlit-expanderContent span, .streamlit-expanderContent div { color: #ffffff !important; }
+    
     .stButton button[kind="primary"] { background-color: #00c853 !important; border: none !important; color: #ffffff !important; font-weight: 700 !important; }
     .stButton button[kind="primary"]:hover { background-color: #009624 !important; }
-    .stButton button[kind="primary"] p { color: #ffffff !important; }
     .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
-    .stButton button[kind="secondary"]:hover { background-color: #b91c1c !important; }
-    .stButton button[kind="secondary"] p { color: #ffffff !important; }
     
-    /* Botón Reagendar (Celeste) */
-    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button { background-color: #00b0ff !important; color: white !important; border: none !important; }
-    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button:hover { background-color: #0091ea !important; }
-    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button p { color: white !important; }
-
     /* Uploader */
-    [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
-    [data-testid="stFileUploader"] section { min-height: 0px !important; padding: 10px !important; background-color: transparent !important; border: 2px dashed #00b0ff !important; border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    [data-testid="stFileUploader"] section { min-height: 0px !important; padding: 10px !important; border: 2px dashed #00b0ff !important; }
     [data-testid="stFileUploader"] section::after { content: "➕"; font-size: 32px; color: #00b0ff !important; display: block; }
-
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
-    img { max-width: 100%; }
-    .caption-text { font-size: 1.1rem !important; font-weight: 700 !important; margin-bottom: 0.5rem; }
     
-    /* Compactar markdown en detalles */
+    /* Texto compacto en detalles */
     .compact-md p { margin-bottom: 0px !important; line-height: 1.4 !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -90,7 +60,7 @@ AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87
 ADMIN_BASE_ID = "appRF7jHcmBJZA1px"
 USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"
 CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"
-BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd"  # <--- ✅ ID DE RESPALDO INTEGRADO
+BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd" 
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
@@ -151,17 +121,9 @@ def render_logo_dinamico(is_banner=False):
     if os.path.exists(light_path) and os.path.exists(dark_path):
         b64_light = get_base64_image(light_path)
         b64_dark = get_base64_image(dark_path)
-        
-        # HTML CON CLASES PARA SWITCH CSS
-        html = f"""
-        <div style="text-align: center;">
-            <img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}">
-            <img src="data:image/png;base64,{b64_dark}" class="logo-dark" style="{width_css}">
-        </div>
-        """
+        html = f"""<div style="text-align: center;"><img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}"><img src="data:image/png;base64,{b64_dark}" class="logo-dark" style="{width_css}"></div>"""
         st.markdown(html, unsafe_allow_html=True)
-    else:
-        st.markdown("## 🏦 **Provident**")
+    else: st.markdown("## 🏦 **Provident**")
 
 def get_imagen_plantilla(tipo_evento):
     carpeta_assets = "assets"
@@ -191,10 +153,10 @@ def check_evidencia_completa(fields):
 # ==============================================================================
 # 3. FUNCIONES AIRTABLE (CORE)
 # ==============================================================================
-def airtable_request(method, url, data=None):
+def airtable_request(method, url, data=None, params=None):
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
     try:
-        if method == "GET": r = requests.get(url, headers=headers)
+        if method == "GET": r = requests.get(url, headers=headers, params=params)
         elif method == "POST": r = requests.post(url, json=data, headers=headers)
         elif method == "PATCH": r = requests.patch(url, json=data, headers=headers)
         elif method == "DELETE": r = requests.delete(url, headers=headers)
@@ -222,7 +184,35 @@ def get_records(base_id, table_id, year, plaza):
     filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     return filtered
 
-# --- LÓGICA DE RESPALDO Y BLOQUEO ---
+# --- NUEVA FUNCIÓN: BÚSQUEDA GLOBAL DE SOLICITUDES ---
+def get_all_pending_requests():
+    """Busca en TODAS las bases y tablas configuradas registros con Estado_Bloqueo = 'Solicitado'"""
+    config = cargar_config_airtable()
+    pending_list = []
+    
+    # Iterar sobre todas las bases y tablas de la configuración
+    for base_name, base_id in config['bases'].items():
+        tables = config['tables'].get(base_id, {})
+        for table_name, table_id in tables.items():
+            # Usar filtro de servidor para no descargar todo (optimización)
+            # filterByFormula: {Estado_Bloqueo}='Solicitado'
+            params = {"filterByFormula": "{Estado_Bloqueo}='Solicitado'"}
+            r = airtable_request("GET", f"https://api.airtable.com/v0/{base_id}/{table_id}", params=params)
+            
+            if r and r.status_code == 200:
+                records = r.json().get('records', [])
+                for rec in records:
+                    # Añadir metadatos para saber de dónde viene
+                    rec['metadata'] = {
+                        "base_id": base_id,
+                        "table_id": table_id,
+                        "base_name": base_name,
+                        "table_name": table_name
+                    }
+                    pending_list.append(rec)
+    return pending_list
+
+# --- LÓGICA DE RESPALDO Y BLOQUEO (MEJORADA PARA DEBUG) ---
 def crear_respaldo_evento(fields_original):
     """Copia todos los campos relevantes a la tabla de respaldo"""
     campos_copiar = ["Tipo", "Fecha", "Hora", "Sucursal", "Seccion", "Ruta a seguir", "Punto de reunion", "Municipio", "Cantidad", "AM Responsable", "DM Responsable", "Teléfono AM", "Teléfono DM", "Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]
@@ -235,8 +225,8 @@ def crear_respaldo_evento(fields_original):
             else:
                 new_data[k] = fields_original[k]
     
-    # Copia a la tabla de Backup (Modificacion Con Permiso)
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{BACKUP_TABLE_ID}"
+    # Devolvemos el objeto respuesta completo para analizar errores
     return airtable_request("POST", url, {"fields": new_data})
 
 def solicitar_desbloqueo(base_id, table_id, record_id):
@@ -246,13 +236,20 @@ def solicitar_desbloqueo(base_id, table_id, record_id):
 def aprobar_desbloqueo_admin(base_id, table_id, record_full_data):
     # 1. Crear Respaldo
     resp_backup = crear_respaldo_evento(record_full_data['fields'])
-    # Aunque falle el respaldo, por seguridad desbloqueamos? No, mejor asegurar respaldo.
+    
+    # Verificar si el respaldo fue exitoso
     if resp_backup and resp_backup.status_code == 200:
         # 2. Desbloquear Original
         url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_full_data['id']}"
         resp_update = airtable_request("PATCH", url, {"fields": {"Estado_Bloqueo": "Desbloqueado"}})
-        return resp_update.status_code == 200
-    return False
+        if resp_update and resp_update.status_code == 200:
+            return True, "Éxito"
+        else:
+            return False, f"Respaldo OK, pero falló desbloqueo original: {resp_update.text}"
+    else:
+        # Aquí capturamos el error exacto de Airtable (ej: columna no existe)
+        error_msg = resp_backup.text if resp_backup else "Error de conexión en respaldo"
+        return False, f"Fallo al crear respaldo: {error_msg}"
 
 # --- GESTIÓN USUARIOS Y CONFIG ---
 def cargar_usuarios_airtable():
@@ -401,21 +398,37 @@ else:
             st.json(conf)
 
         with ta:
-            st.subheader("🔐 Solicitudes de Desbloqueo (Tabla Actual)")
-            if 'search_results' in st.session_state:
-                pending = [r for r in st.session_state.search_results if r['fields'].get('Estado_Bloqueo') == 'Solicitado']
-                if not pending: st.info("No hay solicitudes pendientes en esta tabla.")
-                else:
-                    for p in pending:
-                        pf = p['fields']
-                        with st.expander(f"Solicitud: {pf.get('Tipo')} - {pf.get('Fecha')}", expanded=True):
-                            st.write(f"**Sucursal:** {pf.get('Sucursal')} | **AM:** {pf.get('AM Responsable')}")
-                            if st.button("✅ APROBAR Y RESPALDAR", key=f"ap_{p['id']}", type="primary"):
+            st.subheader("🔐 Todas las Solicitudes Pendientes (Global)")
+            
+            if st.button("🔄 Actualizar Lista"): st.rerun()
+            
+            with st.spinner("Buscando solicitudes en todas las bases y tablas..."):
+                global_pending = get_all_pending_requests()
+            
+            if not global_pending:
+                st.info("✅ No hay solicitudes pendientes en ninguna tabla.")
+            else:
+                for p in global_pending:
+                    pf = p['fields']
+                    meta = p['metadata']
+                    # Header informativo
+                    label = f"[{meta['base_name']} / {meta['table_name']}] - {pf.get('Sucursal')} - {pf.get('Fecha')} ({pf.get('Tipo')})"
+                    
+                    with st.expander(label, expanded=True):
+                        c1, c2 = st.columns([3, 1])
+                        with c1:
+                            st.markdown(f"**AM:** {pf.get('AM Responsable')} | **Municipio:** {pf.get('Municipio')}")
+                            st.caption(f"ID Registro: {p['id']}")
+                        with c2:
+                            if st.button("✅ APROBAR", key=f"ga_{p['id']}", type="primary", use_container_width=True):
                                 with st.spinner("Creando respaldo y desbloqueando..."):
-                                    if aprobar_desbloqueo_admin(st.session_state.current_base_id, st.session_state.current_table_id, p):
-                                        st.success("Procesado."); st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view); st.rerun()
-                                    else: st.error("Error al procesar.")
-            else: st.warning("Carga una tabla primero.")
+                                    # Usamos los IDs guardados en metadata para procesar
+                                    ok, msg = aprobar_desbloqueo_admin(meta['base_id'], meta['table_id'], p)
+                                    if ok:
+                                        st.success("¡Aprobado con éxito!"); st.rerun()
+                                    else:
+                                        st.error(f"❌ Error crítico: {msg}")
+                                        st.info("Revisa que la tabla 'MODIFICACION CON PERMISO' tenga EXACTAMENTE las mismas columnas que el original.")
 
         main_area = tm
     else: main_area = st.container()
@@ -431,10 +444,10 @@ else:
                 if recs:
                     for r in recs:
                         f = r['fields']; ya_tiene = check_evidencia_completa(f)
-                        # Estado Bloqueo Logic
                         estado_bloqueo = f.get('Estado_Bloqueo')
                         is_locked = ya_tiene and (estado_bloqueo != 'Desbloqueado')
                         icon_lock = "🔒" if is_locked else ""
+                        if estado_bloqueo == 'Solicitado': icon_lock = "⏳"
                         
                         with st.expander(f"{icon_lock} {f.get('Fecha')} | {f.get('Tipo')}", expanded=True):
                             c1, c2 = st.columns([1, 2.5]); c1.image(get_imagen_plantilla(f.get('Tipo')), use_container_width=True)
@@ -474,26 +487,25 @@ else:
                     if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Hecho"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view); st.rerun()
                     else: st.error("Error")
 
-        # 3. CARGA EVIDENCIA (CON BLOQUEO)
+        # 3. CARGA EVIDENCIA
         else:
             evt = st.session_state.selected_event; f=evt['fields']
             if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
             st.divider(); st.markdown(f"### 📸 {f.get('Tipo')} - {obtener_ubicacion_corta(f)}"); st.divider()
             
-            # Lógica de Bloqueo
             ya_tiene = check_evidencia_completa(f)
             estado = f.get('Estado_Bloqueo')
             bloqueado = ya_tiene and (estado != 'Desbloqueado')
 
             if bloqueado:
-                st.warning("🔒 Registro Bloqueado. Se requiere permiso para modificar.")
-                if estado == 'Solicitado': st.info("⏳ Solicitud enviada. Esperando aprobación.")
+                st.warning("🔒 Registro Bloqueado.")
+                if estado == 'Solicitado': st.info("⏳ Solicitud enviada. Esperando al admin.")
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
                         with st.spinner("Enviando..."):
-                            if solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id']):
-                                st.success("Enviado."); evt['fields']['Estado_Bloqueo']='Solicitado'; st.rerun()
-                            else: st.error("Error.")
+                            resp = solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'])
+                            if resp and resp.status_code==200: st.success("Enviado."); evt['fields']['Estado_Bloqueo']='Solicitado'; st.rerun()
+                            else: st.error("Error: Falta columna 'Estado_Bloqueo' en Airtable.")
 
             def render_cell(col, k, label):
                 with col:
@@ -513,7 +525,7 @@ else:
                                     res = cloudinary.uploader.upload(img_ok, format="webp", resource_type="image")
                                     upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], {k:[{"url":res['secure_url']}]})
                                     st.session_state.selected_event['fields'][k] = [{"url":res['secure_url']}]; st.rerun()
-                        else: st.caption("🔒 Bloqueado")
+                        else: st.caption("🔒")
 
             st.markdown("#### 1. Foto Inicio"); c1,c2 = st.columns(2); render_cell(c1, "Foto de equipo", "Foto Equipo")
             st.markdown("#### 2. Actividad"); keys=["Foto 01","Foto 02","Foto 03","Foto 04","Foto 05","Foto 06","Foto 07"]
