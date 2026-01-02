@@ -19,7 +19,7 @@ st.markdown("""
     [data-testid="stSidebar"] {display: none;}
     [data-testid="collapsedControl"] {display: none;}
     
-    /* --- UPLOADER TIPO BOTÓN (+) --- */
+    /* UPLOADER ESTILO BOTÓN (+) */
     [data-testid="stFileUploader"] small {display: none;}
     [data-testid="stFileUploader"] button {display: none;}
     [data-testid="stFileUploader"] section > div {display: none;}
@@ -36,7 +36,6 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Icono + grande */
     [data-testid="stFileUploader"] section::after {
         content: "➕";
         font-size: 28px;
@@ -45,12 +44,7 @@ st.markdown("""
         display: block;
     }
 
-    /* Efecto de carga */
-    .stSpinner > div {
-        border-top-color: #002060 !important;
-    }
-
-    /* Botón Eliminar */
+    /* Botón Eliminar Rojo */
     .stButton button[kind="secondary"] {
         color: #e53e3e;
         border-color: #e53e3e;
@@ -282,9 +276,11 @@ else:
             st.rerun()
     st.divider()
 
-    # TOPBAR
+    # --- TOPBAR AUTO-CARGA ---
     with st.container():
-        col_base, col_mes, col_plaza, col_btn = st.columns([2, 2, 2, 2])
+        # Usamos 3 columnas (Eliminamos la del botón)
+        col_base, col_mes, col_plaza = st.columns(3)
+        
         with col_base:
             bases_map = get_authorized_bases()
             if not bases_map: st.warning("⚠️ Sin bases"); base_id = None
@@ -299,12 +295,35 @@ else:
             plazas_permitidas = st.session_state.allowed_plazas
             sel_plaza = st.selectbox("📍 Plaza", plazas_permitidas) if plazas_permitidas else None
             if sel_plaza: st.session_state.sucursal_actual = sel_plaza
-        with col_btn:
-            st.write(""); st.write("")
-            if sel_plaza and base_id and table_id and st.button("🔄 CARGAR EVENTOS", type="primary", use_container_width=True):
-                st.session_state.selected_event = None; st.session_state.rescheduling_event = None
-                st.session_state.search_results = get_records(base_id, table_id, YEAR_ACTUAL, sel_plaza)
-                st.session_state.current_base_id = base_id; st.session_state.current_table_id = table_id; st.session_state.current_plaza_view = sel_plaza
+
+    # --- LÓGICA DE AUTO-CARGA (SE EJECUTA EN CADA RERUN) ---
+    if base_id and table_id and sel_plaza:
+        # Verificamos si cambió algo respecto a lo que tenemos en memoria
+        has_changed = (
+            base_id != st.session_state.get('current_base_id') or
+            table_id != st.session_state.get('current_table_id') or
+            sel_plaza != st.session_state.get('current_plaza_view') or
+            'search_results' not in st.session_state
+        )
+        
+        if has_changed:
+            with st.spinner("🔄 Actualizando eventos..."):
+                # Limpiamos selecciones previas para evitar inconsistencias
+                st.session_state.selected_event = None
+                st.session_state.rescheduling_event = None
+                
+                # Fetch de datos
+                results = get_records(base_id, table_id, YEAR_ACTUAL, sel_plaza)
+                
+                # Guardamos en estado
+                st.session_state.search_results = results
+                st.session_state.current_base_id = base_id
+                st.session_state.current_table_id = table_id
+                st.session_state.current_plaza_view = sel_plaza
+                
+                # No hacemos st.rerun() aquí para evitar bucles infinitos, 
+                # Streamlit renderizará lo siguiente con los nuevos datos.
+
     st.divider()
 
     # PESTAÑAS ADMIN
@@ -388,16 +407,16 @@ else:
                     if ex: st.success("✅ Creado."); registrar_historial("Reagendar",st.session_state.user_name,nsu,f"Orig:{f_orig.get('Fecha')}->New:{nf}"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id,st.session_state.current_table_id,YEAR_ACTUAL,st.session_state.current_plaza_view); st.rerun()
                     else: st.error(f"Error: {rs}")
 
-        # 3. CARGA EVIDENCIA (AUTO-UPLOAD IMPLEMENTADO)
+        # 3. CARGA EVIDENCIA (AUTO-UPLOAD)
         else:
             evt = st.session_state.selected_event
             fields = evt['fields']
 
-            # --- FUNCION CORE: RENDERIZAR CELDA CON AUTO-SUBIDA ---
+            # FUNCION CORE AUTO-UPLOAD
             def render_celda_auto(columna, key, label, fields_dict):
                 with columna:
                     st.caption(label)
-                    # CASO 1: YA EXISTE IMAGEN -> MOSTRAR + BOTON BORRAR
+                    # CASO 1: YA EXISTE IMAGEN
                     if fields_dict.get(key):
                         url_img = fields_dict[key][0]['url']
                         st.image(url_img, use_container_width=True)
@@ -408,29 +427,19 @@ else:
                                     st.rerun()
                                 else: st.error("Error al borrar")
 
-                    # CASO 2: VACÍO -> MOSTRAR UPLOADER + SUBIDA AUTOMÁTICA
+                    # CASO 2: VACÍO (AUTO-UPLOAD)
                     else:
-                        # Nota: type=['jpg'...] ayuda a priorizar galería en móviles
                         file = st.file_uploader(key, key=f"up_{evt['id']}_{key}", label_visibility="collapsed", type=['jpg','png','jpeg','webp'])
-                        
-                        # ¡AQUÍ ESTÁ LA MAGIA DEL AUTO-UPLOAD!
                         if file is not None:
                             with st.spinner(f"Subiendo {label}..."):
                                 try:
-                                    # 1. Cloudinary
                                     resp = cloudinary.uploader.upload(file)
                                     payload = {key: [{"url": resp['secure_url']}]}
-                                    
-                                    # 2. Airtable
                                     if upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], payload):
-                                        # 3. Actualizar Estado Local
                                         st.session_state.selected_event['fields'].update(payload)
-                                        # 4. Refrescar UI (Mostrará la foto inmediatamente)
                                         st.rerun()
-                                    else:
-                                        st.error("Error conectando con Airtable")
-                                except Exception as e:
-                                    st.error(f"Error: {str(e)}")
+                                    else: st.error("Error conectando con Airtable")
+                                except Exception as e: st.error(f"Error: {str(e)}")
 
             if st.button("⬅️ REGRESAR A LISTADO"):
                 st.session_state.selected_event = None; st.rerun()
