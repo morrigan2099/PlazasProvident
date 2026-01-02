@@ -103,7 +103,6 @@ def check_evidencia_completa(fields):
         "Foto 04", "Foto 05", "Foto 06", "Foto 07", 
         "Reporte firmado", "Lista de asistencia"
     ]
-    # Retorna True si AL MENOS UNO tiene contenido (evita reagendar si ya empezaron)
     for k in claves_evidencia:
         if fields.get(k): return True
     return False
@@ -165,21 +164,15 @@ def upload_evidence_to_airtable(base_id, table_id, record_id, updates_dict):
     return r.status_code == 200
 
 def create_new_event(base_id, table_id, new_data):
-    """Crea un nuevo registro en Airtable (Copia modificada)"""
+    """Crea un nuevo registro en Airtable"""
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
-    
-    # Aseguramos formato correcto de datos
     payload = {"fields": new_data}
-    
     try:
         r = requests.post(url, json=payload, headers=headers)
-        if r.status_code == 200:
-            return True, r.json()
-        else:
-            return False, r.text
-    except Exception as e:
-        return False, str(e)
+        if r.status_code == 200: return True, r.json()
+        else: return False, r.text
+    except Exception as e: return False, str(e)
 
 # ==============================================================================
 # 4. GESTIÓN DE SESIÓN
@@ -297,8 +290,7 @@ else:
                 if recs:
                     for r in recs:
                         f = r['fields']
-                        
-                        # CHEQUEO DE EVIDENCIA EXISTENTE
+                        # CHEQUEO DE EVIDENCIA
                         ya_tiene_evidencia = check_evidencia_completa(f)
                         
                         with st.expander(f"{f.get('Fecha')} | {f.get('Tipo', 'Evento')}", expanded=True):
@@ -323,7 +315,7 @@ else:
                                         st.session_state.selected_event = r
                                         st.rerun()
                                 
-                                # BOTÓN REAGENDAR (Solo si NO hay evidencia)
+                                # BOTÓN REAGENDAR (Si no hay evidencia)
                                 if not ya_tiene_evidencia:
                                     with cb2:
                                         if st.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True):
@@ -334,45 +326,53 @@ else:
                     else: st.warning("Carga eventos primero.")
             else: st.info("👆 Cargar eventos.")
 
-        # 2. VISTA REAGENDAR (FORMULARIO DE COPIA)
+        # 2. VISTA REAGENDAR (MODIFICADA: COPIA TODO)
         elif st.session_state.rescheduling_event is not None:
             evt = st.session_state.rescheduling_event
             f_orig = evt['fields']
             
-            if st.button("⬅️ CANCELAR REAGENDADO"):
+            if st.button("⬅️ CANCELAR"):
                 st.session_state.rescheduling_event = None
                 st.rerun()
             
             st.markdown("### ⚠️ Reagendar Evento")
-            st.info("Esto creará una copia del evento con los nuevos datos.")
+            st.info("Todos los datos originales se conservarán, excepto los modificados abajo.")
             
             with st.form("reschedule_form"):
                 c1, c2 = st.columns(2)
-                # Campos Editables
-                # Fecha
+                
+                # Valores actuales
                 try: 
                     fecha_obj = datetime.strptime(f_orig.get('Fecha', datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d")
                 except: 
                     fecha_obj = datetime.now()
                 
+                # Inputs editables
                 new_fecha = c1.date_input("Fecha", value=fecha_obj)
                 new_hora = c2.text_input("Hora", value=f_orig.get('Hora', '09:00'))
-
                 new_tipo = st.text_input("Tipo", value=f_orig.get('Tipo', ''))
                 new_suc = st.text_input("Sucursal", value=f_orig.get('Sucursal', st.session_state.sucursal_actual))
-                
-                new_seccion = st.text_input("Sección", value=f_orig.get('Seccion', '')) # Campo nuevo si existe
+                new_seccion = st.text_input("Sección", value=f_orig.get('Seccion', ''))
                 new_ruta = st.text_input("Ruta a seguir", value=f_orig.get('Ruta a seguir', ''))
                 new_punto = st.text_input("Punto de reunión", value=f_orig.get('Punto de reunion', ''))
                 new_muni = st.text_input("Municipio", value=f_orig.get('Municipio', ''))
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                if st.form_submit_button("💾 GUARDAR NUEVA FECHA", type="primary", use_container_width=True):
-                    # Construir el nuevo registro
-                    municipio_final = f"{new_muni} (Evento Reagendado)"
+                if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
+                    # 1. COPIAR TODO EL DICCIONARIO ORIGINAL
+                    nuevo_registro = f_orig.copy()
                     
-                    nuevo_registro = {
+                    # 2. ELIMINAR CAMPOS QUE NO DEBEN IR (Attachments viejos)
+                    # Aunque "todos" se copian, las fotos viejas no deberían ir en un reagendado
+                    # Si insistes en copiar INCLUSO las fotos, comenta estas lineas:
+                    keys_to_remove = ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", 
+                                      "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia", "Created"]
+                    for k in keys_to_remove:
+                        if k in nuevo_registro: del nuevo_registro[k]
+
+                    # 3. ACTUALIZAR SOLO LOS CAMPOS CLAVE
+                    nuevo_registro.update({
                         "Fecha": new_fecha.strftime("%Y-%m-%d"),
                         "Hora": new_hora,
                         "Tipo": new_tipo,
@@ -380,11 +380,10 @@ else:
                         "Seccion": new_seccion,
                         "Ruta a seguir": new_ruta,
                         "Punto de reunion": new_punto,
-                        "Municipio": municipio_final
-                        # No copiamos fotos ni reportes antiguos
-                    }
+                        "Municipio": f"{new_muni} (Evento Reagendado)"
+                    })
                     
-                    # Llamada a la API
+                    # 4. ENVIAR
                     exito, resp = create_new_event(
                         st.session_state.current_base_id,
                         st.session_state.current_table_id,
@@ -392,21 +391,15 @@ else:
                     )
                     
                     if exito:
-                        st.success("✅ Evento reagendado creado correctamente.")
-                        registrar_historial("Reagendar", st.session_state.user_name, new_suc, f"Original: {f_orig.get('Fecha')} -> Nueva: {new_fecha}")
+                        st.success("✅ Reagendado creado.")
+                        registrar_historial("Reagendar", st.session_state.user_name, new_suc, f"Origen: {f_orig.get('Fecha')}")
                         st.session_state.rescheduling_event = None
-                        # Forzar recarga
-                        st.session_state.search_results = get_records(
-                            st.session_state.current_base_id, 
-                            st.session_state.current_table_id, 
-                            YEAR_ACTUAL, 
-                            st.session_state.current_plaza_view
-                        )
+                        st.session_state.search_results = get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view)
                         st.rerun()
                     else:
-                        st.error(f"Error al crear: {resp}")
+                        st.error(f"Error: {resp}")
 
-        # 3. VISTA CARGA DE EVIDENCIA (Original)
+        # 3. VISTA CARGA (Original)
         else:
             evt = st.session_state.selected_event
             fields = evt['fields']
@@ -417,7 +410,6 @@ else:
             st.markdown(f"### 📸 Cargar Evidencia: {fields.get('Tipo')}")
             with st.form("upload_form"):
                 uploads = {}
-                # (Sección Carga igual que antes)
                 st.caption("1. Foto Equipo"); c1,c2=st.columns([3,1]); uploads['Foto de equipo']=c1.file_uploader("Eq",key="ue",label_visibility="collapsed")
                 if fields.get('Foto de equipo'): c2.image(fields['Foto de equipo'][0]['url'],width=80)
                 
