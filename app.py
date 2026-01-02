@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 import json
 import unicodedata
+import re
 
 # ==============================================================================
 # 1. CONFIGURACIÓN Y CREDENCIALES
@@ -44,11 +45,23 @@ YEAR_ACTUAL = 2025 # Año fijo
 # 2. FUNCIONES DE UTILIDAD
 # ==============================================================================
 
-def normalizar_texto(texto):
-    """Quita acentos y pasa a minúsculas: 'Promoción' -> 'promocion'"""
+def limpiar_clave(texto):
+    """
+    Convierte 'Valla Móvil con Volanteo' en 'vallamovilconvolanteo'.
+    Elimina acentos, espacios y caracteres especiales para asegurar coincidencia.
+    """
     if not isinstance(texto, str): return str(texto).lower()
+    
+    # 1. Normalizar unicode (separar acentos)
     texto = unicodedata.normalize('NFD', texto)
-    return ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower()
+    # 2. Filtrar solo caracteres ASCII (quita acentos)
+    texto = ''.join(c for c in texto if unicodedata.category(c) != 'Mn')
+    # 3. Pasar a minúsculas
+    texto = texto.lower()
+    # 4. Eliminar todo lo que no sea letra o número (incluyendo espacios)
+    texto = re.sub(r'[^a-z0-9]', '', texto)
+    
+    return texto
 
 def formatear_fecha_larga(fecha_str):
     if not fecha_str: return "Fecha pendiente"
@@ -61,45 +74,56 @@ def formatear_fecha_larga(fecha_str):
 
 def get_imagen_plantilla(tipo_evento):
     """
-    Busca en la carpeta 'assets' ignorando mayúsculas y acentos.
-    Compara: normalizar_texto(TIPO) == normalizar_texto(NOMBRE_ARCHIVO)
+    Busca coincidencias en la carpeta assets usando 'limpiar_clave'.
     """
     carpeta_assets = "assets"
-    
-    # URL por defecto si no hay assets locales o falla todo
     url_default = "https://www.provident.com.mx/content/dam/provident-mexico/logos/logo-provident.png"
 
-    if not tipo_evento:
-        tipo_evento = "default"
+    if not tipo_evento: tipo_evento = "default"
 
-    # 1. Verificamos si existe la carpeta
+    # Verificar existencia de carpeta
     if not os.path.exists(carpeta_assets):
+        # Si estás en local, asegúrate de crear la carpeta 'assets' junto al script
         return url_default
 
-    # 2. Normalizamos el tipo buscado (ej: "Activación" -> "activacion")
-    tipo_buscado = normalizar_texto(str(tipo_evento))
+    # Clave limpia del evento (ej: "vallamovil")
+    clave_buscada = limpiar_clave(str(tipo_evento))
 
-    # 3. Listamos los archivos en la carpeta y buscamos coincidencia
     try:
-        archivos_en_carpeta = os.listdir(carpeta_assets)
-        for archivo in archivos_en_carpeta:
-            # Separamos nombre de extensión (ej: "Activación.png" -> "Activación")
+        archivos = os.listdir(carpeta_assets)
+        
+        # 1. Búsqueda exacta (limpiando nombres)
+        for archivo in archivos:
+            nombre_base = os.path.splitext(archivo)[0] # Quita .png
+            clave_archivo = limpiar_clave(nombre_base)
+            
+            if clave_buscada == clave_archivo:
+                return os.path.join(carpeta_assets, archivo)
+        
+        # 2. Búsqueda parcial (si la clave está contenida en el archivo o viceversa)
+        for archivo in archivos:
             nombre_base = os.path.splitext(archivo)[0]
-            # Normalizamos el nombre del archivo (ej: "Activación" -> "activacion")
-            nombre_archivo_norm = normalizar_texto(nombre_base)
+            clave_archivo = limpiar_clave(nombre_base)
+            
+            # Ejemplo: TIPO="Valla" y archivo="Valla Movil.png" (Intento de fallback)
+            if clave_buscada in clave_archivo:
+                 return os.path.join(carpeta_assets, archivo)
 
-            if tipo_buscado == nombre_archivo_norm:
+        # 3. Fallback a imagen por defecto local
+        for archivo in archivos:
+            if "default" in limpiar_clave(archivo):
                 return os.path.join(carpeta_assets, archivo)
-        
-        # 4. Si no encuentra exacta, busca si hay un "default" local
-        for archivo in archivos_en_carpeta:
-            if "default" in normalizar_texto(archivo):
-                return os.path.join(carpeta_assets, archivo)
-                
+
     except Exception as e:
-        print(f"Error buscando assets: {e}")
-        
+        print(f"Error assets: {e}")
+
     return url_default
+
+def normalizar_texto_simple(texto):
+    """Para comparar Sucursales (mantiene espacios)"""
+    if not isinstance(texto, str): return str(texto).lower()
+    texto = unicodedata.normalize('NFD', texto)
+    return ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower()
 
 def cargar_usuarios():
     if not os.path.exists(FILES_DB):
@@ -151,7 +175,9 @@ def get_records(base_id, table_id, year, plaza):
     except: return []
 
     filtered = []
-    plaza_norm = normalizar_texto(plaza)
+    # Usamos la normalización simple para Sucursales (respeta espacios para evitar errores de lectura)
+    plaza_norm = normalizar_texto_simple(plaza)
+    
     for rec in data:
         fields = rec.get('fields', {})
         fecha_dato = fields.get('Fecha')
@@ -162,7 +188,7 @@ def get_records(base_id, table_id, year, plaza):
         match_plaza = False
         if suc_dato:
             val_suc = str(suc_dato[0]) if isinstance(suc_dato, list) else str(suc_dato)
-            if normalizar_texto(val_suc) == plaza_norm: match_plaza = True
+            if normalizar_texto_simple(val_suc) == plaza_norm: match_plaza = True
         
         if match_year and match_plaza: filtered.append(rec)
             
@@ -282,6 +308,7 @@ else:
                         with st.expander(f"{f.get('Fecha')} - {f.get('Tipo', 'Evento')}", expanded=True):
                             col_img, col_data = st.columns([1, 2.5])
                             with col_img:
+                                # Aquí obtenemos la imagen con la nueva lógica de limpieza
                                 img_path = get_imagen_plantilla(f.get('Tipo'))
                                 st.image(img_path, use_container_width=True)
                             with col_data:
@@ -296,8 +323,12 @@ else:
                                 with c_btn_2:
                                     if st.button("⚠️ EVENTO REAGENDADO", key=f"re_{r['id']}", use_container_width=True):
                                         st.warning("Pendiente de conectar.")
-                else: st.info("No hay eventos.")
-            else: st.info("👈 Actualizar eventos.")
+                else: 
+                    if st.session_state.get('sucursal_actual'):
+                        st.info("No hay eventos.")
+                    else:
+                        st.warning("Selecciona una plaza.")
+            else: st.info("👈 Presiona Actualizar Eventos.")
 
         # VISTA B: CARGAR EVIDENCIA
         else:
@@ -319,20 +350,18 @@ else:
                 uploads['Foto de equipo'] = c1.file_uploader("Imagen", type=['jpg','png','jpeg'], key="u_eq")
                 if fields.get('Foto de equipo'): c2.image(fields['Foto de equipo'][0]['url'], width=100)
                 
-                # 2. ACTIVIDAD (GRID CORREGIDO)
+                # 2. ACTIVIDAD
                 st.markdown("#### 2. Fotos de Actividad")
                 grid = [("Foto 01","Foto 02"), ("Foto 03","Foto 04"), ("Foto 05","Foto 06"), ("Foto 07",None)]
                 for l_izq, l_der in grid:
                     col_a, col_b = st.columns(2)
                     with col_a:
                         uploads[l_izq] = st.file_uploader(l_izq, type=['jpg','png'], key=f"k_{l_izq}", label_visibility="collapsed")
-                        # --- CORRECCION: Mostrar imagen existente ---
                         if fields.get(l_izq): st.image(fields[l_izq][0]['url'], width=100)
                     
                     if l_der:
                         with col_b:
                             uploads[l_der] = st.file_uploader(l_der, type=['jpg','png'], key=f"k_{l_der}", label_visibility="collapsed")
-                            # --- CORRECCION: Mostrar imagen existente ---
                             if fields.get(l_der): st.image(fields[l_der][0]['url'], width=100)
 
                 st.markdown("---")
