@@ -19,9 +19,6 @@ import pytz
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
-st.divider(); 
-            if st.button("⬅️ REGRESAR (FINAL)", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
-
 st.markdown("""
 <style>
     /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
