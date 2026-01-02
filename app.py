@@ -325,7 +325,7 @@ else:
                     else: st.warning("Carga eventos primero.")
             else: st.info("👆 Cargar eventos.")
 
-        # 2. VISTA REAGENDAR (MODIFICADA CON CAMPOS EXTRA)
+        # 2. VISTA REAGENDAR (CORREGIDA: ELIMINA CAMPOS COMPUTADOS)
         elif st.session_state.rescheduling_event is not None:
             evt = st.session_state.rescheduling_event
             f_orig = evt['fields']
@@ -367,20 +367,23 @@ else:
                 with c3:
                     new_muni = st.text_input("Municipio", value=f_orig.get('Municipio', ''))
                     new_punto = st.text_input("Punto de reunión", value=f_orig.get('Punto de reunion', ''))
-                    # Cantidad (No visualizable en tarjeta, pero editable aquí)
-                    # Tratamos como texto o numero según venga en Airtable, default texto para no fallar
                     new_cant = st.text_input("Cantidad", value=f_orig.get('Cantidad', ''))
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 if st.form_submit_button("💾 GUARDAR NUEVA FECHA", type="primary", use_container_width=True):
-                    # 1. COPIAR TODO EL DICCIONARIO ORIGINAL (Para no perder datos extra)
+                    # 1. COPIAR TODO EL DICCIONARIO ORIGINAL
                     nuevo_registro = f_orig.copy()
                     
-                    # 2. ELIMINAR CAMPOS QUE NO DEBEN IR (Attachments viejos y metadatos)
-                    keys_to_remove = ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", 
-                                      "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia", 
-                                      "Created", "Modified", "Record ID"]
+                    # 2. ELIMINAR CAMPOS PROHIBIDOS (Archivos, Metadatos y FÓRMULAS como Status)
+                    keys_to_remove = [
+                        "Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", 
+                        "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia", 
+                        "Created", "Modified", "Record ID", "Status", "Semana" 
+                    ] 
+                    # NOTA: Agregué "Status" y "Semana" por si acaso también es fórmula.
+                    # Si tienes otros campos fórmula (ej. "Día Semana", "ID"), agrégalos a esta lista.
+
                     for k in keys_to_remove:
                         if k in nuevo_registro: del nuevo_registro[k]
 
@@ -412,7 +415,6 @@ else:
                         st.success("✅ Reagendado creado correctamente.")
                         registrar_historial("Reagendar", st.session_state.user_name, new_suc, f"Original: {f_orig.get('Fecha')} -> Nueva: {new_fecha}")
                         st.session_state.rescheduling_event = None
-                        # Recargar lista
                         st.session_state.search_results = get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view)
                         st.rerun()
                     else:
