@@ -10,85 +10,50 @@ import unicodedata
 import re
 from PIL import Image
 import io
+import base64
 
 # ==============================================================================
-# 1. CONFIGURACIÓN Y ESTILOS (TEMA CLARO + EXPANDERS NEGROS)
+# 1. CONFIGURACIÓN Y ESTILOS
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
 st.markdown("""
 <style>
-    /* --- 1. TEMA GENERAL (CLARO / LIGHT MODE) --- */
+    /* --- 1. TEMA GENERAL --- */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        background-color: #ffffff !important;
-    }
-    
-    /* Textos generales fuera de tarjetas (Negro) */
-    h1, h2, h3, h4, h5, h6, p, li, span, label, div {
-        color: #000000 !important;
+        /* Dejamos que Streamlit maneje el fondo (Auto/Light/Dark) */
     }
 
-    /* Inputs y Menús (Fondo Blanco / Texto Negro) */
-    .stTextInput input, .stDateInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-        border-color: #cccccc !important;
-    }
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul {
-        background-color: #ffffff !important;
-    }
-    li[role="option"] {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-    }
-    /* Texto dentro de las opciones del menú */
-    div[data-baseweb="select"] span {
-        color: #000000 !important;
-    }
+    /* --- 2. LOGOTIPO DINÁMICO --- */
+    /* Por defecto (Light Mode): Mostrar Light, Ocultar Dark */
+    .logo-light { display: block; }
+    .logo-dark { display: none; }
 
-    /* --- 2. EXPANDERS (TARJETAS) -> FONDO NEGRO / TEXTO BLANCO --- */
-    
-    /* Encabezado del Expander */
+    /* En Dark Mode (Detectado por Streamlit): Mostrar Dark, Ocultar Light */
+    [data-theme="dark"] .logo-light { display: none !important; }
+    [data-theme="dark"] .logo-dark { display: block !important; }
+
+    /* --- 3. EXPANDERS (TARJETAS) -> FONDO NEGRO / TEXTO BLANCO --- */
     .streamlit-expanderHeader {
-        background-color: #000000 !important; /* NEGRO PURO */
-        color: #ffffff !important;             /* BLANCO */
+        background-color: #000000 !important;
+        color: #ffffff !important;
         border: 1px solid #333333 !important;
         border-radius: 8px !important;
     }
-    
-    /* Contenido del Expander */
     .streamlit-expanderContent {
-        background-color: #1a1a1a !important; /* GRIS MUY OSCURO */
+        background-color: #1a1a1a !important;
         color: #ffffff !important;
         border: 1px solid #333333 !important;
         border-top: none !important;
-        border-bottom-left-radius: 8px !important;
-        border-bottom-right-radius: 8px !important;
     }
-
-    /* FORZAR TEXTO BLANCO SOLO DENTRO DE LOS EXPANDERS */
-    /* Usamos selectores específicos para sobreescribir la regla general de texto negro */
-    .streamlit-expanderHeader p, 
-    .streamlit-expanderHeader span,
-    .streamlit-expanderHeader svg {
+    .streamlit-expanderHeader p, .streamlit-expanderHeader span, .streamlit-expanderHeader svg,
+    .streamlit-expanderContent p, .streamlit-expanderContent span, .streamlit-expanderContent h1, 
+    .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent li {
         color: #ffffff !important;
         fill: #ffffff !important;
     }
-    
-    .streamlit-expanderContent p, 
-    .streamlit-expanderContent span, 
-    .streamlit-expanderContent div, 
-    .streamlit-expanderContent h1, 
-    .streamlit-expanderContent h2, 
-    .streamlit-expanderContent h3, 
-    .streamlit-expanderContent li, 
-    .streamlit-expanderContent strong,
-    .streamlit-expanderContent label {
-        color: #ffffff !important;
-    }
 
-    /* --- 3. BOTONES (TEXTO BLANCO SIEMPRE) --- */
-    
+    /* --- 4. BOTONES --- */
     /* Primario (Verde Sólido) */
     .stButton button[kind="primary"] {
         background-color: #00c853 !important;
@@ -109,14 +74,24 @@ st.markdown("""
     .stButton button[kind="secondary"] p { color: #ffffff !important; }
     .stButton button[kind="secondary"]:hover { background-color: #b91c1c !important; }
 
-    /* --- 4. UPLOADER --- */
+    /* REAGENDAR (Celeste Brillante) - Botón en 2da columna de expander */
+    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button {
+        background-color: #00b0ff !important;
+        color: white !important;
+        border: none !important;
+    }
+    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button p { color: white !important; }
+    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button:hover {
+        background-color: #0091ea !important;
+    }
+
+    /* --- 5. UPLOADER --- */
     [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
-    
     [data-testid="stFileUploader"] section {
         min-height: 0px !important;
         padding: 10px !important;
-        background-color: #f8f9fa !important; /* Fondo claro */
-        border: 2px dashed #00b0ff !important; /* Borde Celeste */
+        background-color: transparent !important;
+        border: 2px dashed #00b0ff !important;
         border-radius: 12px;
         align-items: center;
         justify-content: center;
@@ -131,16 +106,14 @@ st.markdown("""
         display: block;
     }
 
-    /* --- 5. OCULTAR NATIVOS --- */
+    /* --- 6. ELEMENTOS OCULTOS --- */
     [data-testid="stSidebar"] {display: none;}
     [data-testid="collapsedControl"] {display: none;}
     img { max-width: 100%; }
     
-    /* Títulos de fotos (Negros porque están en fondo blanco) */
     .caption-text {
         font-size: 1.1rem !important;
         font-weight: 700 !important;
-        color: #000000 !important;
         margin-bottom: 0.5rem;
     }
 </style>
@@ -205,13 +178,32 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
-def render_logo(is_banner=False):
-    path_logo = os.path.join("assets", "logo.png")
-    if os.path.exists(path_logo):
-        # use_container_width=True hace que llene la columna
-        st.image(path_logo, use_container_width=True) 
+# --- FUNCION DE LOGO DINÁMICO (BASE64 + CSS) ---
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
+def render_logo_dinamico(is_banner=False):
+    light_path = os.path.join("assets", "lightlogo.png")
+    dark_path = os.path.join("assets", "darklogo.png")
+    
+    # CSS width
+    width_css = "width: 100%;" if is_banner else "width: 150px; max-width: 100%;"
+    
+    if os.path.exists(light_path) and os.path.exists(dark_path):
+        b64_light = get_base64_image(light_path)
+        b64_dark = get_base64_image(dark_path)
+        
+        # Inyectamos HTML directo con clases para togglear
+        html = f"""
+        <div style="text-align: center;">
+            <img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}">
+            <img src="data:image/png;base64,{b64_dark}" class="logo-dark" style="{width_css}">
+        </div>
+        """
+        st.markdown(html, unsafe_allow_html=True)
     else:
-        st.markdown(f"## 🏦 **Provident**") 
+        st.markdown("## 🏦 **Provident**")
 
 def get_imagen_plantilla(tipo_evento):
     carpeta_assets = "assets" 
@@ -359,11 +351,9 @@ if 'rescheduling_event' not in st.session_state: st.session_state.rescheduling_e
 # ==============================================================================
 if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
-    c_izq, c_centro, c_der = st.columns([1, 2, 1])
-    with c_centro:
-        # LOGO GRANDE DENTRO DE LA CAJA (BANNER DEL ANCHO DE COLUMNA)
-        render_logo(is_banner=True) 
-        
+    col_izq, col_centro, col_der = st.columns([1, 2, 1])
+    with col_centro:
+        render_logo_dinamico(is_banner=True) # Logo Dinámico Banner
         st.markdown("<h3 style='text-align: center;'>🔐 Acceso al Sistema</h3>", unsafe_allow_html=True)
         with st.form("login_form"):
             usuario_input = st.text_input("👤 Usuario:")
@@ -385,7 +375,7 @@ if not st.session_state.logged_in:
 # ==============================================================================
 else:
     # --- HEADER ---
-    render_logo(is_banner=True) # Banner Full Width
+    render_logo_dinamico(is_banner=True) # Banner Full Width
     st.markdown("<br>", unsafe_allow_html=True)
 
     c_user, c_fill, c_logout = st.columns([3, 4, 1])
@@ -478,7 +468,7 @@ else:
                                 c1,c2=st.columns(2)
                                 if c1.button("📸 SUBIR EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True): st.session_state.selected_event=r; st.rerun()
                                 if not ya_tiene:
-                                    if c2.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True, type="secondary"): st.session_state.rescheduling_event=r; st.rerun()
+                                    if c2.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True): st.session_state.rescheduling_event=r; st.rerun()
                 else: 
                     if st.session_state.get('sucursal_actual'): st.info("No hay eventos.")
                     else: st.warning("Carga eventos.")
