@@ -78,7 +78,7 @@ AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87
 ADMIN_BASE_ID = "appRF7jHcmBJZA1px"
 USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"
 CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"
-BACKUP_TABLE_ID = "tbl..."  # <--- ⚠️ PON AQUÍ EL ID DE LA TABLA "MODIFICACION CON PERMISO"
+BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd"  # <--- ⚠️ PON AQUÍ EL ID DE LA TABLA "MODIFICACION CON PERMISO"
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
