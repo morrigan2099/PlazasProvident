@@ -18,6 +18,29 @@ import base64
 # ==============================================================================
 st.set_page_config(page_title="Gestor Provident", layout="wide")
 
+# JS PARA NOTIFICACIONES DE NAVEGADOR
+st.markdown("""
+<script>
+    function requestNotificationPermission() {
+        if (!("Notification" in window)) {
+            alert("Este navegador no soporta notificaciones de escritorio");
+        } else if (Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+    }
+    requestNotificationPermission();
+    
+    function sendNotification() {
+        if (Notification.permission === "granted") {
+            new Notification("🔐 GESTOR PROVIDENT", {
+                body: "¡Nueva solicitud de desbloqueo recibida!",
+                icon: "https://cdn-icons-png.flaticon.com/512/1827/1827301.png"
+            });
+        }
+    }
+</script>
+""", unsafe_allow_html=True)
+
 st.markdown("""
 <style>
     /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
@@ -50,24 +73,15 @@ st.markdown("""
     .stButton button[kind="primary"] p { color: #ffffff !important; }
     .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
     
-    /* --- UPLOADER (BOTÓN AZUL SÓLIDO CON +) --- */
-    [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
-    [data-testid="stFileUploader"] section {
-        min-height: 0px !important;
-        padding: 15px !important;
-        background-color: #00b0ff !important; /* Fondo Azul Sólido */
-        border: none !important;
-        border-radius: 12px;
+    /* UPLOADER: BOTÓN AZUL SÓLIDO */
+    [data-testid="stFileUploader"] section { 
+        min-height: 0px !important; padding: 15px !important; 
+        background-color: #00b0ff !important; border: none !important; border-radius: 12px; 
         display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
-    [data-testid="stFileUploader"] section::after {
-        content: "➕"; /* Emoji Más */
-        font-size: 35px;
-        color: white !important; /* Blanco */
-        display: block;
-        font-weight: 900 !important;
-    }
-    
+    [data-testid="stFileUploader"] section::after { content: "➕"; font-size: 35px; color: white !important; font-weight: 900 !important; display: block; }
+    [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
+
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
     .compact-md p { margin-bottom: 0px !important; line-height: 1.4 !important; }
 </style>
@@ -86,7 +100,7 @@ ADMIN_BASE_ID = "appRF7jHcmBJZA1px"
 USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"
 CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"
 BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd" 
-HISTORY_TABLE_ID = "tblmy6hL3VXQM5883"
+HISTORY_TABLE_ID = "tblmy6hL3VXQM5883" 
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
@@ -159,23 +173,10 @@ def normalizar_texto_simple(texto):
     if not isinstance(texto, str): return str(texto).lower()
     return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn').lower()
 
-# --- LÓGICA DE COMPLETITUD CORREGIDA ---
 def check_evidencia_completa(fields):
-    """Devuelve True SOLO si TODAS las evidencias obligatorias están presentes."""
-    claves_obligatorias = [
-        "Foto de equipo", 
-        "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", 
-        "Reporte firmado"
-    ]
-    # Si falta ALGUNA, no está completo (retorna False)
-    for k in claves_obligatorias:
-        if not fields.get(k): return False
-    
-    # Si es Actividad en Sucursal, verificamos también Lista
-    if fields.get('Tipo') == "Actividad en Sucursal":
-        if not fields.get('Lista de asistencia'): return False
-        
-    return True
+    for k in ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]:
+        if fields.get(k): return True
+    return False
 
 # ==============================================================================
 # 3. FUNCIONES AIRTABLE
@@ -197,31 +198,19 @@ def airtable_request(method, url, data=None, params=None):
 
 # --- AUDITORÍA / LOGS ---
 def registrar_historial(accion, detalles):
+    if "tbl" not in HISTORY_TABLE_ID: return 
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}"
     usuario = st.session_state.get('user_name', 'Sistema')
     rol = st.session_state.get('user_role', '--')
     sucursal = st.session_state.get('sucursal_actual', 'N/A')
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S") 
-    
-    data = {
-        "fields": {
-            "Fecha": fecha,
-            "Usuario": usuario,
-            "Rol": rol,
-            "Sucursal": sucursal,
-            "Accion": accion,
-            "Detalles": detalles
-        }
-    }
+    data = {"fields": {"Fecha": fecha, "Usuario": usuario, "Rol": rol, "Sucursal": sucursal, "Accion": accion, "Detalles": detalles}}
     res = requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
-    if res.status_code != 200:
-        st.toast(f"Error guardando historial: {res.text}", icon="⚠️")
+    if res.status_code != 200: st.toast(f"Error historial: {res.text}", icon="⚠️")
 
 def get_full_history():
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}?sort%5B0%5D%5Bfield%5D=Fecha&sort%5B0%5D%5Bdirection%5D=desc")
-    if r and r.status_code == 200:
-        return [rec['fields'] for rec in r.json().get('records', [])]
-    return []
+    return [rec['fields'] for rec in r.json().get('records', [])] if r and r.status_code==200 else []
 
 # --- FUNCIONES DE DATOS ---
 def api_get_all_bases():
@@ -429,7 +418,8 @@ else:
         label_solicitudes = f"🔐 Solicitudes ({count_pending}) 🔴" if count_pending > 0 else "🔐 Solicitudes"
         if count_pending > 0:
             st.toast(f"🔔 ¡ATENCIÓN! HAY {count_pending} SOLICITUDES DE PERMISO", icon="🚨")
-            st.markdown("""<audio autoplay><source src="https://upload.wikimedia.org/wikipedia/commons/0/05/Beep-09.ogg" type="audio/ogg"></audio>""", unsafe_allow_html=True)
+            # Inyección de sonido y trigger de notificación JS
+            st.markdown("""<audio autoplay><source src="https://upload.wikimedia.org/wikipedia/commons/0/05/Beep-09.ogg" type="audio/ogg"></audio><script>sendNotification();</script>""", unsafe_allow_html=True)
 
         tm, tu, tc, ta, th = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Config", label_solicitudes, "📜 Historial"])
         
@@ -461,8 +451,17 @@ else:
 
         with ta:
             st.subheader("🔐 Todas las Solicitudes Pendientes (Global)")
-            if st.button("🔄 Actualizar Lista"): st.rerun()
-            if not all_pending: st.info("✅ No hay solicitudes pendientes.")
+            
+            # --- MONITOR EN VIVO (REFRESH AUTOMÁTICO ADMIN) ---
+            monitor_activo = st.checkbox("🔄 Activar Monitor en Vivo", value=False)
+            if monitor_activo:
+                time.sleep(5)
+                st.rerun()
+                
+            if st.button("🔄 Actualizar Lista Manual"): st.rerun()
+            
+            if not all_pending:
+                st.info("✅ No hay solicitudes pendientes.")
             else:
                 for p in all_pending:
                     pf = p['fields']; meta = p['metadata']
@@ -505,15 +504,12 @@ else:
                         f = r['fields']; esta_completo = check_evidencia_completa(f)
                         estado_bloqueo = f.get('Estado_Bloqueo')
                         
-                        # LOGICA DE BLOQUEO CORREGIDA:
-                        # Si está completo -> Bloqueado (a menos que tenga permiso)
-                        # Si NO está completo -> Abierto (usuario puede editar libremente)
-                        is_locked = False
+                        # LOGICA: Bloqueo SOLO si está completo Y no desbloqueado
+                        bloqueado = False
                         icon_lock = ""
-                        
                         if esta_completo:
                             if estado_bloqueo != 'Desbloqueado':
-                                is_locked = True
+                                bloqueado = True
                                 icon_lock = "🔒"
                                 if estado_bloqueo == 'Solicitado': icon_lock = "⏳"
                         
@@ -553,37 +549,28 @@ else:
             evt = st.session_state.selected_event; f=evt['fields']
             
             # --- AUTO-CONSULTA PARA DETECTAR DESBLOQUEO ---
-            # Si estaba bloqueado y en estado solicitado, consultamos de nuevo a ver si el admin aprobó
             current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
-            if current_record_fresh:
-                f = current_record_fresh['fields']
-                evt = current_record_fresh # Actualizar objeto en memoria
+            if current_record_fresh: f = current_record_fresh['fields']; evt = current_record_fresh
             
             if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
             st.divider(); st.markdown(f"### 📸 {f.get('Tipo')} - {obtener_ubicacion_corta(f)}"); st.divider()
             
             esta_completo = check_evidencia_completa(f)
             estado = f.get('Estado_Bloqueo')
-            
-            # Definir estado de bloqueo
             bloqueado = False
-            if esta_completo:
-                if estado != 'Desbloqueado': bloqueado = True
+            if esta_completo and estado != 'Desbloqueado': bloqueado = True
 
             if bloqueado:
                 st.warning("🔒 Registro Completo y Bloqueado.")
                 if estado == 'Solicitado': 
                     st.info("⏳ Solicitud enviada. Esperando autorización... (La pantalla se actualizará automáticamente)")
-                    time.sleep(4) # Esperar 4 seg y recargar
-                    st.rerun()
+                    time.sleep(4); st.rerun() # POLLING USUARIO
                 else:
                     if st.button("🔓 SOLICITAR DESBLOQUEO", type="primary"):
                         with st.spinner("Enviando..."):
                             resp = solicitar_desbloqueo(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'])
                             if resp and resp.status_code==200: st.success("Enviado."); st.rerun()
-                            else: pass 
             else:
-                # Si estaba completo pero ahora está desbloqueado, notificar
                 if esta_completo and estado == 'Desbloqueado':
                      st.toast("🔓 ¡PERMISO CONCEDIDO!", icon="✅")
                      st.markdown("""<audio autoplay><source src="https://upload.wikimedia.org/wikipedia/commons/0/05/Beep-09.ogg" type="audio/ogg"></audio>""", unsafe_allow_html=True)
@@ -618,7 +605,7 @@ else:
             st.markdown(f"#### {t3}"); cr3=st.columns(2); render_cell(cr3[0], "Reporte firmado", "Reporte")
             if f.get('Tipo') == "Actividad en Sucursal": render_cell(cr3[1], "Lista de asistencia", "Lista")
             
-            # BOTÓN FINALIZAR (RE-BLOQUEO + SALIDA AUTOMÁTICA)
+            # BOTÓN FINALIZAR -> REGRESAR A LISTA
             if not bloqueado and esta_completo:
                 st.divider(); st.info("⚠️ Tienes permiso temporal.")
                 if st.button("💾 FINALIZAR Y GUARDAR CAMBIOS", type="primary", use_container_width=True):
