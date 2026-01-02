@@ -325,7 +325,7 @@ else:
                     else: st.warning("Carga eventos primero.")
             else: st.info("👆 Cargar eventos.")
 
-        # 2. VISTA REAGENDAR (CORREGIDA: ELIMINA CAMPOS COMPUTADOS)
+        # 2. VISTA REAGENDAR (NUEVA LÓGICA: WHITELIST - SOLO COPIA FORMULARIO)
         elif st.session_state.rescheduling_event is not None:
             evt = st.session_state.rescheduling_event
             f_orig = evt['fields']
@@ -335,19 +335,19 @@ else:
                 st.rerun()
             
             st.markdown("### ⚠️ Reagendar Evento")
-            st.info("Modifica solo lo necesario. Los datos no mostrados aquí se copiarán del original.")
+            st.info("Ingresa los nuevos datos. Solo se copiará lo que veas aquí.")
             
             with st.form("reschedule_form"):
                 # Usamos 3 columnas para organizar mejor la cantidad de campos
                 c1, c2, c3 = st.columns(3)
                 
-                # Valores actuales Fecha
+                # Valores iniciales (Pre-llenados con datos originales)
                 try: 
                     fecha_obj = datetime.strptime(f_orig.get('Fecha', datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d")
                 except: 
                     fecha_obj = datetime.now()
                 
-                # --- COLUMNA 1: DETALLES GENERALES ---
+                # --- COLUMNA 1 ---
                 with c1:
                     new_fecha = st.date_input("Fecha", value=fecha_obj)
                     new_tipo = st.text_input("Tipo", value=f_orig.get('Tipo', ''))
@@ -355,7 +355,7 @@ else:
                     new_am = st.text_input("AM Responsable", value=f_orig.get('AM Responsable', ''))
                     new_dm = st.text_input("DM Responsable", value=f_orig.get('DM Responsable', ''))
 
-                # --- COLUMNA 2: UBICACIÓN Y LOGÍSTICA ---
+                # --- COLUMNA 2 ---
                 with c2:
                     new_hora = st.text_input("Hora", value=f_orig.get('Hora', '09:00'))
                     new_suc = st.text_input("Sucursal", value=f_orig.get('Sucursal', st.session_state.sucursal_actual))
@@ -363,7 +363,7 @@ else:
                     new_tel_am = st.text_input("Teléfono AM", value=f_orig.get('Teléfono AM', ''))
                     new_tel_dm = st.text_input("Teléfono DM", value=f_orig.get('Teléfono DM', ''))
 
-                # --- COLUMNA 3: DETALLES FINALES ---
+                # --- COLUMNA 3 ---
                 with c3:
                     new_muni = st.text_input("Municipio", value=f_orig.get('Municipio', ''))
                     new_punto = st.text_input("Punto de reunión", value=f_orig.get('Punto de reunion', ''))
@@ -372,23 +372,11 @@ else:
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 if st.form_submit_button("💾 GUARDAR NUEVA FECHA", type="primary", use_container_width=True):
-                    # 1. COPIAR TODO EL DICCIONARIO ORIGINAL
-                    nuevo_registro = f_orig.copy()
+                    # --- AQUI ESTA EL CAMBIO IMPORTANTE ---
+                    # No usamos .copy(). Construimos el diccionario SOLAMENTE con los campos del formulario.
+                    # Esto evita copiar "Status", Fórmulas, Attachments, IDs, etc.
                     
-                    # 2. ELIMINAR CAMPOS PROHIBIDOS (Archivos, Metadatos y FÓRMULAS como Status)
-                    keys_to_remove = [
-                        "Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", 
-                        "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia", 
-                        "Created", "Modified", "Record ID", "Status", "Semana" 
-                    ] 
-                    # NOTA: Agregué "Status" y "Semana" por si acaso también es fórmula.
-                    # Si tienes otros campos fórmula (ej. "Día Semana", "ID"), agrégalos a esta lista.
-
-                    for k in keys_to_remove:
-                        if k in nuevo_registro: del nuevo_registro[k]
-
-                    # 3. ACTUALIZAR CON LOS DATOS DEL FORMULARIO
-                    nuevo_registro.update({
+                    nuevo_registro_limpio = {
                         "Fecha": new_fecha.strftime("%Y-%m-%d"),
                         "Hora": new_hora,
                         "Tipo": new_tipo,
@@ -396,19 +384,19 @@ else:
                         "Seccion": new_seccion,
                         "Ruta a seguir": new_ruta,
                         "Punto de reunion": new_punto,
-                        "Municipio": f"{new_muni} (Evento Reagendado)",
+                        "Municipio": f"{new_muni} (Evento Reagendado)", # Agregamos la etiqueta
                         "Cantidad": new_cant,
                         "AM Responsable": new_am,
                         "Teléfono AM": new_tel_am,
                         "DM Responsable": new_dm,
                         "Teléfono DM": new_tel_dm
-                    })
+                    }
                     
-                    # 4. ENVIAR A AIRTABLE
+                    # ENVIAR A AIRTABLE
                     exito, resp = create_new_event(
                         st.session_state.current_base_id,
                         st.session_state.current_table_id,
-                        nuevo_registro
+                        nuevo_registro_limpio
                     )
                     
                     if exito:
