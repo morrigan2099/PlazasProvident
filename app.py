@@ -21,19 +21,16 @@ st.markdown("""
 <style>
     /* --- 1. TEMA GENERAL --- */
     .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        /* Dejamos que Streamlit maneje el fondo (Auto/Light/Dark) */
+        /* Dejamos que Streamlit maneje el fondo */
     }
 
     /* --- 2. LOGOTIPO DINÁMICO --- */
-    /* Por defecto (Light Mode): Mostrar Light, Ocultar Dark */
     .logo-light { display: block; }
     .logo-dark { display: none; }
-
-    /* En Dark Mode (Detectado por Streamlit): Mostrar Dark, Ocultar Light */
     [data-theme="dark"] .logo-light { display: none !important; }
     [data-theme="dark"] .logo-dark { display: block !important; }
 
-    /* --- 3. EXPANDERS (TARJETAS) -> FONDO NEGRO / TEXTO BLANCO --- */
+    /* --- 3. EXPANDERS (FONDO NEGRO / TEXTO BLANCO) --- */
     .streamlit-expanderHeader {
         background-color: #000000 !important;
         color: #ffffff !important;
@@ -48,42 +45,40 @@ st.markdown("""
     }
     .streamlit-expanderHeader p, .streamlit-expanderHeader span, .streamlit-expanderHeader svg,
     .streamlit-expanderContent p, .streamlit-expanderContent span, .streamlit-expanderContent h1, 
-    .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent li {
+    .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent li, .streamlit-expanderContent label {
         color: #ffffff !important;
         fill: #ffffff !important;
     }
 
     /* --- 4. BOTONES --- */
-    /* Primario (Verde Sólido) */
     .stButton button[kind="primary"] {
         background-color: #00c853 !important;
         border: none !important;
         color: #ffffff !important;
         font-weight: 700 !important;
     }
-    .stButton button[kind="primary"] p { color: #ffffff !important; }
     .stButton button[kind="primary"]:hover { background-color: #009624 !important; }
+    .stButton button[kind="primary"] p { color: #ffffff !important; }
 
-    /* Secundario (Rojo Sólido) */
     .stButton button[kind="secondary"] {
         background-color: #dc2626 !important;
         border: none !important;
         color: #ffffff !important;
         font-weight: 600 !important;
     }
-    .stButton button[kind="secondary"] p { color: #ffffff !important; }
     .stButton button[kind="secondary"]:hover { background-color: #b91c1c !important; }
+    .stButton button[kind="secondary"] p { color: #ffffff !important; }
 
-    /* REAGENDAR (Celeste Brillante) - Botón en 2da columna de expander */
+    /* REAGENDAR (Celeste) */
     [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button {
         background-color: #00b0ff !important;
         color: white !important;
         border: none !important;
     }
-    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button p { color: white !important; }
     [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button:hover {
         background-color: #0091ea !important;
     }
+    [data-testid="stExpanderDetails"] [data-testid="column"]:nth-child(2) button p { color: white !important; }
 
     /* --- 5. UPLOADER --- */
     [data-testid="stFileUploader"] small, [data-testid="stFileUploader"] button, [data-testid="stFileUploader"] section > div {display: none;}
@@ -93,29 +88,16 @@ st.markdown("""
         background-color: transparent !important;
         border: 2px dashed #00b0ff !important;
         border-radius: 12px;
-        align-items: center;
-        justify-content: center;
-        display: flex;
-        cursor: pointer;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
     [data-testid="stFileUploader"] section::after {
-        content: "➕";
-        font-size: 32px;
-        color: #00b0ff !important;
-        visibility: visible;
-        display: block;
+        content: "➕"; font-size: 32px; color: #00b0ff !important; display: block;
     }
 
     /* --- 6. ELEMENTOS OCULTOS --- */
-    [data-testid="stSidebar"] {display: none;}
-    [data-testid="collapsedControl"] {display: none;}
+    [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
     img { max-width: 100%; }
-    
-    .caption-text {
-        font-size: 1.1rem !important;
-        font-weight: 700 !important;
-        margin-bottom: 0.5rem;
-    }
+    .caption-text { font-size: 1.1rem !important; font-weight: 700 !important; margin-bottom: 0.5rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -126,12 +108,13 @@ CLOUDINARY_CONFIG = {
     "api_secret": "i0cJCELeYVAosiBL_ltjHkM_FV0"
 }
 AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87ad1f2d71bfe853ce9783"
-MASTER_ADMIN_PASS = "3spejoVenenoso$2099" 
-SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 
-FILES_DB = "usuarios.json"
-CONFIG_DB = "config_airtable.json"
-HISTORIAL_FILE = "historial_modificaciones.csv"
+# --- ⚠️ CONFIGURACIÓN DE LA BASE MAESTRA ---
+ADMIN_BASE_ID = "appRF7jHcmBJZA1px"       # ID Base: Provident Event Photo Uploader
+USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"      # ID Tabla: Usuarios
+CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"     # ID Tabla: Configuracion
+
+SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
 YEAR_ACTUAL = 2025 
 
 cloudinary.config(
@@ -151,18 +134,17 @@ def limpiar_clave(texto):
 
 def formatear_fecha_larga(fecha_str):
     if not fecha_str: return "Fecha pendiente"
-    dias = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes", 5: "Sábado", 6: "Domingo"}
-    meses = {1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"}
     try:
         dt = datetime.strptime(fecha_str, "%Y-%m-%d")
+        meses = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
+        dias = {0:"Lunes", 1:"Martes", 2:"Miércoles", 3:"Jueves", 4:"Viernes", 5:"Sábado", 6:"Domingo"}
         return f"{dias[dt.weekday()]} {dt.day:02d} de {meses[dt.month]} de {dt.year}"
     except: return fecha_str
 
 def obtener_ubicacion_corta(fields):
     opciones = [str(fields.get('Punto de reunion', '')), str(fields.get('Ruta a seguir', '')), str(fields.get('Municipio', ''))]
     validas = [op for op in opciones if op and op.lower() != 'none' and len(op) > 2]
-    if not validas: return "Ubicación N/A"
-    return min(validas, key=len)
+    return min(validas, key=len) if validas else "Ubicación N/A"
 
 def comprimir_imagen_webp(archivo_upload):
     try:
@@ -178,7 +160,7 @@ def comprimir_imagen_webp(archivo_upload):
         return buffer_salida
     except: return archivo_upload
 
-# --- FUNCION DE LOGO DINÁMICO (BASE64 + CSS) ---
+# --- LOGO DINÁMICO (BASE64) ---
 def get_base64_image(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
@@ -186,15 +168,11 @@ def get_base64_image(image_path):
 def render_logo_dinamico(is_banner=False):
     light_path = os.path.join("assets", "lightlogo.png")
     dark_path = os.path.join("assets", "darklogo.png")
-    
-    # CSS width
     width_css = "width: 100%;" if is_banner else "width: 150px; max-width: 100%;"
     
     if os.path.exists(light_path) and os.path.exists(dark_path):
         b64_light = get_base64_image(light_path)
         b64_dark = get_base64_image(dark_path)
-        
-        # Inyectamos HTML directo con clases para togglear
         html = f"""
         <div style="text-align: center;">
             <img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}">
@@ -206,17 +184,16 @@ def render_logo_dinamico(is_banner=False):
         st.markdown("## 🏦 **Provident**")
 
 def get_imagen_plantilla(tipo_evento):
-    carpeta_assets = "assets" 
-    url_default = "https://via.placeholder.com/400x300.png?text=Provident+Evento" 
+    carpeta_assets = "assets"
+    url_default = "https://via.placeholder.com/400x300.png?text=Provident"
     if not tipo_evento: tipo_evento = "default"
     if not os.path.exists(carpeta_assets): return url_default
-    clave_buscada = limpiar_clave(str(tipo_evento))
+    clave = limpiar_clave(str(tipo_evento))
     try:
-        archivos = os.listdir(carpeta_assets)
-        for archivo in archivos:
-            if limpiar_clave(os.path.splitext(archivo)[0]) == clave_buscada: return os.path.join(carpeta_assets, archivo)
-        for archivo in archivos:
-            if "default" in limpiar_clave(archivo): return os.path.join(carpeta_assets, archivo)
+        for f in os.listdir(carpeta_assets):
+            if limpiar_clave(os.path.splitext(f)[0]) == clave: return os.path.join(carpeta_assets, f)
+        for f in os.listdir(carpeta_assets):
+            if "default" in limpiar_clave(f): return os.path.join(carpeta_assets, f)
     except: pass
     return url_default
 
@@ -225,66 +202,81 @@ def normalizar_texto_simple(texto):
     texto = unicodedata.normalize('NFD', texto)
     return ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower()
 
-def cargar_usuarios():
-    if not os.path.exists(FILES_DB):
-        default_db = {"admin": {"password": MASTER_ADMIN_PASS, "role": "admin", "plazas": SUCURSALES_OFICIALES}}
-        with open(FILES_DB, 'w') as f: json.dump(default_db, f)
-        return default_db
-    with open(FILES_DB, 'r') as f: return json.load(f)
-
-def guardar_usuarios(db):
-    with open(FILES_DB, 'w') as f: json.dump(db, f)
-
-def cargar_config_db():
-    if not os.path.exists(CONFIG_DB): return {} 
-    with open(CONFIG_DB, 'r') as f: return json.load(f)
-
-def guardar_config_db(config_data):
-    with open(CONFIG_DB, 'w') as f: json.dump(config_data, f)
-
-def registrar_historial(accion, usuario, sucursal, detalles):
-    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    nuevo_registro = {"Fecha": fecha, "Usuario": usuario, "Sucursal": sucursal, "Acción": accion, "Detalles": detalles}
-    df_new = pd.DataFrame([nuevo_registro])
-    if not os.path.exists(HISTORIAL_FILE): df_new.to_csv(HISTORIAL_FILE, index=False)
-    else: df_new.to_csv(HISTORIAL_FILE, mode='a', header=False, index=False)
-
 def check_evidencia_completa(fields):
-    claves_evidencia = ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]
-    for k in claves_evidencia:
+    claves = ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]
+    for k in claves: 
         if fields.get(k): return True
     return False
 
 # ==============================================================================
-# 3. FUNCIONES AIRTABLE
+# 3. FUNCIONES DE BASE DE DATOS (AIRTABLE MAESTRA)
 # ==============================================================================
-def api_get_all_bases():
-    url = "https://api.airtable.com/v0/meta/bases"
+
+# --- USUARIOS ---
+def cargar_usuarios_airtable():
+    url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
+    users_dict = {}
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code == 200: return {b['name']: b['id'] for b in r.json().get('bases', [])}
+        if r.status_code == 200:
+            for rec in r.json().get('records', []):
+                f = rec['fields']
+                usuario = f.get('Usuario')
+                if usuario:
+                    plazas_raw = f.get('Plazas', [])
+                    plazas = [p.strip() for p in plazas_raw.split(',')] if isinstance(plazas_raw, str) else plazas_raw
+                    users_dict[usuario] = {
+                        "id_record": rec['id'],
+                        "password": f.get('Password', ''),
+                        "role": f.get('Role', 'user'),
+                        "plazas": plazas
+                    }
     except: pass
-    return {}
+    return users_dict
 
-def api_get_all_tables(base_id):
-    url = f"https://api.airtable.com/v0/meta/bases/{base_id}/tables"
+def crear_actualizar_usuario_airtable(usuario, password, role, plazas, record_id=None):
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
+    fields = {"Usuario": usuario, "Password": password, "Role": role, "Plazas": plazas}
+    if record_id:
+        r = requests.patch(f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}/{record_id}", json={"fields": fields}, headers=headers)
+    else:
+        r = requests.post(f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}", json={"fields": fields}, headers=headers)
+    return r.status_code == 200
+
+def eliminar_usuario_airtable(record_id):
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
+    r = requests.delete(f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{USERS_TABLE_ID}/{record_id}", headers=headers)
+    return r.status_code == 200
+
+# --- CONFIGURACIÓN ---
+def cargar_config_airtable():
+    url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}"
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
+    config = {"bases": {}, "tables": {}}
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code == 200: return {t['name']: t['id'] for t in r.json().get('tables', [])}
+        if r.status_code == 200:
+            for rec in r.json().get('records', []):
+                f = rec['fields']
+                if f.get('Activo'):
+                    b_name = f.get('Nombre_Base'); b_id = f.get('ID_Base')
+                    t_name = f.get('Nombre_Tabla'); t_id = f.get('ID_Tabla')
+                    if b_name and b_id:
+                        config["bases"][b_name] = b_id
+                        if t_name and t_id:
+                            if b_id not in config["tables"]: config["tables"][b_id] = {}
+                            config["tables"][b_id][t_name] = t_id
     except: pass
-    return {}
+    return config
 
-def get_authorized_bases():
-    config = cargar_config_db()
-    return config.get("bases", {})
+def guardar_config_airtable(base_name, base_id, table_name, table_id):
+    url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}"
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
+    fields = {"Nombre_Base": base_name, "ID_Base": base_id, "Nombre_Tabla": table_name, "ID_Tabla": table_id, "Activo": True}
+    requests.post(url, json={"fields": fields}, headers=headers)
 
-def get_authorized_tables(base_id):
-    config = cargar_config_db()
-    all_tables_config = config.get("tables", {})
-    return all_tables_config.get(base_id, {})
-
+# --- FUNCIONES ESTÁNDAR ---
 def get_records(base_id, table_id, year, plaza):
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
@@ -293,47 +285,39 @@ def get_records(base_id, table_id, year, plaza):
         if r.status_code != 200: return []
         data = r.json().get('records', [])
     except: return []
-
     filtered = []
     plaza_norm = normalizar_texto_simple(plaza)
     for rec in data:
-        fields = rec.get('fields', {})
-        fecha_dato = fields.get('Fecha')
-        match_year = False
-        if fecha_dato and str(fecha_dato).startswith(str(year)): match_year = True
-        suc_dato = fields.get('Sucursal')
-        match_plaza = False
-        if suc_dato:
-            val_suc = str(suc_dato[0]) if isinstance(suc_dato, list) else str(suc_dato)
-            if normalizar_texto_simple(val_suc) == plaza_norm: match_plaza = True
-        if match_year and match_plaza: filtered.append(rec)
-    try: filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
-    except: pass
+        f = rec.get('fields', {})
+        if str(f.get('Fecha','')).startswith(str(year)):
+            p_val = f.get('Sucursal')
+            p_str = p_val[0] if isinstance(p_val, list) else str(p_val)
+            if normalizar_texto_simple(p_str) == plaza_norm: filtered.append(rec)
+    filtered.sort(key=lambda x: (x['fields'].get('Fecha',''), x['fields'].get('Hora','')))
     return filtered
 
-def upload_evidence_to_airtable(base_id, table_id, record_id, updates_dict):
+def upload_evidence_to_airtable(base_id, table_id, record_id, updates):
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
-    data = {"fields": updates_dict}
-    r = requests.patch(url, json=data, headers=headers)
+    r = requests.patch(url, json={"fields": updates}, headers=headers)
     return r.status_code == 200
 
-def delete_field_from_airtable(base_id, table_id, record_id, field_name):
-    url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}"
-    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
-    data = {"fields": {field_name: None}} 
-    r = requests.patch(url, json=data, headers=headers)
-    return r.status_code == 200
-
-def create_new_event(base_id, table_id, new_data):
+def create_new_event(base_id, table_id, data):
     url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
-    payload = {"fields": new_data}
-    try:
-        r = requests.post(url, json=payload, headers=headers)
-        if r.status_code == 200: return True, r.json()
-        else: return False, r.text
-    except Exception as e: return False, str(e)
+    r = requests.post(url, json={"fields": data}, headers=headers)
+    return r.status_code == 200, r.text
+
+def delete_field_from_airtable(base_id, table_id, record_id, field):
+    url = f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}"
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
+    r = requests.patch(url, json={"fields": {field: None}}, headers=headers)
+    return r.status_code == 200
+
+def registrar_historial(accion, usuario, sucursal, detalles):
+    # En esta versión sin archivos locales persistentes, el historial local se borra al reiniciar.
+    # Podrías crear una tabla "Historial" en Airtable si deseas guardarlo permanentemente.
+    pass 
 
 # ==============================================================================
 # 4. GESTIÓN DE SESIÓN
@@ -351,15 +335,15 @@ if 'rescheduling_event' not in st.session_state: st.session_state.rescheduling_e
 # ==============================================================================
 if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
-    col_izq, col_centro, col_der = st.columns([1, 2, 1])
-    with col_centro:
-        render_logo_dinamico(is_banner=True) # Logo Dinámico Banner
+    c_izq, c_centro, c_der = st.columns([1, 2, 1])
+    with c_centro:
+        render_logo_dinamico(is_banner=True)
         st.markdown("<h3 style='text-align: center;'>🔐 Acceso al Sistema</h3>", unsafe_allow_html=True)
         with st.form("login_form"):
             usuario_input = st.text_input("👤 Usuario:")
             pass_input = st.text_input("🔑 Contraseña:", type="password")
             if st.form_submit_button("INGRESAR", use_container_width=True, type="primary"):
-                users_db = cargar_usuarios()
+                users_db = cargar_usuarios_airtable()
                 user_data = users_db.get(usuario_input)
                 if user_data and user_data['password'] == pass_input:
                     st.session_state.logged_in = True
@@ -374,27 +358,26 @@ if not st.session_state.logged_in:
 # 6. APP PRINCIPAL
 # ==============================================================================
 else:
-    # --- HEADER ---
-    render_logo_dinamico(is_banner=True) # Banner Full Width
+    # Header
+    render_logo_dinamico(is_banner=True)
     st.markdown("<br>", unsafe_allow_html=True)
-
     c_user, c_fill, c_logout = st.columns([3, 4, 1])
     with c_user: st.markdown(f"#### 👤 {st.session_state.user_name} | {st.session_state.user_role.upper()}")
-    with c_logout:
-        if st.button("SALIR", use_container_width=True, type="secondary"):
-            st.session_state.logged_in = False; st.rerun()
+    with c_logout: 
+        if st.button("SALIR", use_container_width=True, type="secondary"): st.session_state.logged_in=False; st.rerun()
     st.divider()
 
-    # --- TOPBAR FILTROS ---
+    # Topbar
     with st.container():
         col_base, col_mes, col_plaza = st.columns(3)
+        config_db = cargar_config_airtable()
+        bases_map = config_db.get("bases", {})
         with col_base:
-            bases_map = get_authorized_bases()
-            if not bases_map: st.warning("⚠️ Sin bases"); base_id = None
+            if not bases_map: st.warning("⚠️ Sin bases configuradas"); base_id = None
             else: base_name = st.selectbox("📂 Base de Datos", list(bases_map.keys())); base_id = bases_map[base_name]
         with col_mes:
             if base_id:
-                tables_map = get_authorized_tables(base_id)
+                tables_map = config_db.get("tables", {}).get(base_id, {})
                 if tables_map: table_name = st.selectbox("📅 Mes", list(tables_map.keys())); table_id = tables_map[table_name]
                 else: table_id = None
             else: st.selectbox("📅 Mes", [], disabled=True); table_id = None
@@ -403,53 +386,51 @@ else:
             sel_plaza = st.selectbox("📍 Plaza", plazas_permitidas) if plazas_permitidas else None
             if sel_plaza: st.session_state.sucursal_actual = sel_plaza
 
-    # --- AUTO-CARGA ---
+    # Auto-Carga
     if base_id and table_id and sel_plaza:
-        has_changed = (base_id != st.session_state.get('current_base_id') or table_id != st.session_state.get('current_table_id') or sel_plaza != st.session_state.get('current_plaza_view') or 'search_results' not in st.session_state)
-        if has_changed:
-            with st.spinner("🔄 Actualizando lista..."):
+        if (base_id != st.session_state.get('current_base_id') or 
+            table_id != st.session_state.get('current_table_id') or 
+            sel_plaza != st.session_state.get('current_plaza_view')):
+            with st.spinner("🔄 Cargando..."):
                 st.session_state.selected_event = None; st.session_state.rescheduling_event = None
                 st.session_state.search_results = get_records(base_id, table_id, YEAR_ACTUAL, sel_plaza)
                 st.session_state.current_base_id = base_id; st.session_state.current_table_id = table_id; st.session_state.current_plaza_view = sel_plaza
 
     st.divider()
 
-    # --- PESTAÑAS ADMIN ---
+    # ADMIN
     if st.session_state.user_role == "admin":
-        tab_main, tab_users, tab_config_db, tab_hist = st.tabs(["📂 Eventos", "👥 Usuarios", "⚙️ Configuración DB", "📜 Historial"])
+        tab_main, tab_users, tab_config_db = st.tabs(["📂 Eventos", "👥 Usuarios (DB)", "⚙️ Config DB"])
+        
         with tab_users:
-            users_db = cargar_usuarios(); st.subheader("Gestión de Accesos"); opciones_usuarios = ["(Crear Nuevo)"] + list(users_db.keys()); seleccion = st.selectbox("🔍 Seleccionar Usuario:", opciones_usuarios)
-            if seleccion == "(Crear Nuevo)": val_user = ""; val_pass = ""; val_role = "user"; val_plazas = []; es_edicion = False
-            else: data_u = users_db[seleccion]; val_user = seleccion; val_pass = data_u.get('password', ''); val_role = data_u.get('role', 'user'); val_plazas = data_u.get('plazas', []); es_edicion = True
-            with st.form("form_usuarios_admin"):
-                c1, c2 = st.columns(2); new_user = c1.text_input("Usuario (ID)", value=val_user); new_pass = c2.text_input("Contraseña", value=val_pass)
-                c3, c4 = st.columns(2); new_role = c3.selectbox("Rol", ["user", "admin"], index=0 if val_role=="user" else 1); new_plazas = c4.multiselect("Plazas", SUCURSALES_OFICIALES, default=[p for p in val_plazas if p in SUCURSALES_OFICIALES])
-                if st.form_submit_button("💾 Guardar Datos", type="primary"):
-                    if not new_user or not new_pass: st.error("Faltan datos.")
-                    else:
-                        if es_edicion and new_user != seleccion: del users_db[seleccion]
-                        users_db[new_user] = {"password": new_pass, "role": new_role, "plazas": new_plazas}; guardar_usuarios(users_db); st.success("Guardado."); st.rerun()
-            if es_edicion:
-                if st.button("🗑️ Eliminar Usuario", type="secondary"): del users_db[seleccion]; guardar_usuarios(users_db); st.warning("Eliminado."); st.rerun()
+            st.subheader("Gestión de Usuarios (En Base Maestra)")
+            users_db = cargar_usuarios_airtable()
+            opciones = ["(Crear Nuevo)"] + list(users_db.keys()); seleccion = st.selectbox("Editar:", opciones)
+            if seleccion == "(Crear Nuevo)": u_val=""; p_val=""; r_val="user"; pl_val=[]; rec_id=None
+            else: d = users_db[seleccion]; u_val=seleccion; p_val=d['password']; r_val=d['role']; pl_val=d['plazas']; rec_id=d['id_record']
+            with st.form("user_form"):
+                c1, c2 = st.columns(2); nu = c1.text_input("Usuario", value=u_val); np = c2.text_input("Password", value=p_val)
+                nr = st.selectbox("Rol", ["user", "admin"], index=0 if r_val=="user" else 1); npl = st.multiselect("Plazas", SUCURSALES_OFICIALES, default=[x for x in pl_val if x in SUCURSALES_OFICIALES])
+                if st.form_submit_button("💾 Guardar en DB", type="primary"):
+                    if crear_actualizar_usuario_airtable(nu, np, nr, npl, rec_id): st.success("✅ Guardado"); st.rerun()
+                    else: st.error("Error al guardar")
+            if rec_id and st.button("🗑️ Eliminar Usuario", type="secondary"): eliminar_usuario_airtable(rec_id); st.warning("Eliminado"); st.rerun()
+
         with tab_config_db:
-             current_config = cargar_config_db(); current_bases = current_config.get("bases", {}); current_tables = current_config.get("tables", {})
-             with st.spinner("Conectando..."): real_bases = api_get_all_bases()
-             if real_bases:
-                 with st.form("db_c"):
-                     bs = st.multiselect("Bases:", list(real_bases.keys()), default=[n for n in real_bases if n in current_bases])
-                     nb={}; nt={}
-                     for b in bs:
-                         bid=real_bases[b]; nb[b]=bid; rt=api_get_all_tables(bid); pt=current_tables.get(bid,{})
-                         ts=st.multiselect(f"Tablas {b}:", list(rt.keys()), default=[n for n in rt if n in pt]); nt[bid]={n:rt[n] for n in ts}
-                     if st.form_submit_button("💾 Guardar Configuración", type="primary"): guardar_config_db({"bases":nb,"tables":nt}); st.success("Ok"); st.rerun()
-        with tab_hist:
-             if os.path.exists(HISTORIAL_FILE): st.dataframe(pd.read_csv(HISTORIAL_FILE).sort_values("Fecha", ascending=False), use_container_width=True)
+            st.subheader("Agregar Configuración de Visibilidad")
+            with st.form("add_config"):
+                c1, c2 = st.columns(2); nb = c1.text_input("Nombre Base (Ej: Provident 2025)"); ib = c2.text_input("ID Base (app...)")
+                c3, c4 = st.columns(2); nt = c3.text_input("Nombre Tabla (Ej: Enero)"); it = c4.text_input("ID Tabla (tbl...)")
+                if st.form_submit_button("➕ Agregar", type="primary"):
+                    if nb and ib and nt and it: guardar_config_airtable(nb, ib, nt, it); st.success("Agregado"); st.rerun()
+                    else: st.error("Faltan datos")
+            st.json(cargar_config_airtable())
         main_area = tab_main
     else: main_area = st.container()
 
-    # --- VISTAS PRINCIPALES ---
+    # VISTAS PRINCIPALES
     with main_area:
-        if 'current_plaza_view' in st.session_state: st.markdown(f"### 📋 Eventos en {st.session_state.current_plaza_view} ({YEAR_ACTUAL})")
+        if 'current_plaza_view' in st.session_state: st.markdown(f"### 📋 Eventos en {st.session_state.current_plaza_view}")
 
         # 1. LISTADO
         if st.session_state.selected_event is None and st.session_state.rescheduling_event is None:
@@ -458,77 +439,66 @@ else:
                 if recs:
                     for r in recs:
                         f = r['fields']; ya_tiene = check_evidencia_completa(f)
-                        with st.expander(f"{f.get('Fecha')} | {f.get('Tipo', 'Evento')}", expanded=True):
-                            col_img, col_data = st.columns([1, 2.5])
-                            with col_img: st.image(get_imagen_plantilla(f.get('Tipo')), use_container_width=True)
-                            with col_data:
-                                st.markdown(f"### 🗓️ {formatear_fecha_larga(f.get('Fecha'))}")
-                                st.markdown(f"**📌 Tipo:** {f.get('Tipo','--')}\n**📍 Punto:** {f.get('Punto de reunion','--')}\n**🛣️ Ruta:** {f.get('Ruta a seguir','--')}\n**🏙️ Muni:** {f.get('Municipio','--')}\n**⏰ Hora:** {f.get('Hora','--')}")
-                                st.markdown("<br>",unsafe_allow_html=True)
-                                c1,c2=st.columns(2)
-                                if c1.button("📸 SUBIR EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True): st.session_state.selected_event=r; st.rerun()
-                                if not ya_tiene:
-                                    if c2.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True): st.session_state.rescheduling_event=r; st.rerun()
-                else: 
-                    if st.session_state.get('sucursal_actual'): st.info("No hay eventos.")
-                    else: st.warning("Carga eventos.")
-            else: st.info("👆 Cargar eventos.")
+                        with st.expander(f"{f.get('Fecha')} | {f.get('Tipo')}", expanded=True):
+                            c1, c2 = st.columns([1, 2.5]); c1.image(get_imagen_plantilla(f.get('Tipo')), use_container_width=True)
+                            c2.markdown(f"**📍 {obtener_ubicacion_corta(f)}**\n\n{formatear_fecha_larga(f.get('Fecha'))} | {f.get('Hora')}")
+                            cb1, cb2 = st.columns(2)
+                            if cb1.button("📸 SUBIR EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True): st.session_state.selected_event=r; st.rerun()
+                            if not ya_tiene:
+                                if cb2.button("⚠️ EVENTO REAGENDADO", key=f"r_{r['id']}", use_container_width=True): st.session_state.rescheduling_event=r; st.rerun()
+                else: st.info("No hay eventos.")
+            else: st.info("Selecciona base y mes.")
 
         # 2. REAGENDAR
-        elif st.session_state.rescheduling_event is not None:
-            evt = st.session_state.rescheduling_event; f_orig = evt['fields']
-            if st.button("⬅️ CANCELAR REAGENDADO", use_container_width=True, type="secondary"): st.session_state.rescheduling_event = None; st.rerun()
+        elif st.session_state.rescheduling_event:
+            evt = st.session_state.rescheduling_event; f=evt['fields']
+            if st.button("⬅️ CANCELAR", type="secondary", use_container_width=True): st.session_state.rescheduling_event=None; st.rerun()
             st.markdown("### ⚠️ Reagendar Evento")
-            with st.form("reschedule_form"):
-                c1, c2, c3 = st.columns(3)
-                try: fd = datetime.strptime(f_orig.get('Fecha', datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d")
-                except: fd = datetime.now()
-                with c1: nf=st.date_input("Fecha",value=fd); nt=st.text_input("Tipo",value=f_orig.get('Tipo','')); ns=st.text_input("Sección",value=f_orig.get('Seccion','')); nam=st.text_input("AM",value=f_orig.get('AM Responsable','')); ndm=st.text_input("DM",value=f_orig.get('DM Responsable',''))
-                with c2: nh=st.text_input("Hora",value=f_orig.get('Hora','09:00')); nsu=st.text_input("Sucursal",value=f_orig.get('Sucursal',st.session_state.sucursal_actual)); nr=st.text_input("Ruta",value=f_orig.get('Ruta a seguir','')); ntam=st.text_input("Tel AM",value=f_orig.get('Teléfono AM','')); ntdm=st.text_input("Tel DM",value=f_orig.get('Teléfono DM',''))
-                with c3: nm=st.text_input("Municipio",value=f_orig.get('Municipio','')); np=st.text_input("Punto",value=f_orig.get('Punto de reunion','')); nc=st.text_input("Cantidad",value=f_orig.get('Cantidad',''))
-                st.markdown("<br>",unsafe_allow_html=True)
-                if st.form_submit_button("💾 GUARDAR NUEVA FECHA", type="primary", use_container_width=True):
-                    new_reg = {"Fecha":nf.strftime("%Y-%m-%d"),"Hora":nh,"Tipo":nt,"Sucursal":nsu,"Seccion":ns,"Ruta a seguir":nr,"Punto de reunion":np,"Municipio":f"{nm} (Evento Reagendado)","Cantidad":nc,"AM Responsable":nam,"Teléfono AM":ntam,"DM Responsable":ndm,"Teléfono DM":ntdm}
-                    ex, rs = create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)
-                    if ex: st.success("✅ Creado."); registrar_historial("Reagendar",st.session_state.user_name,nsu,f"Orig:{f_orig.get('Fecha')}->New:{nf}"); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id,st.session_state.current_table_id,YEAR_ACTUAL,st.session_state.current_plaza_view); st.rerun()
-                    else: st.error(f"Error: {rs}")
+            with st.form("reschedule"):
+                c1,c2,c3 = st.columns(3)
+                try: fd=datetime.strptime(f.get('Fecha'),"%Y-%m-%d")
+                except: fd=datetime.now()
+                nf=c1.date_input("Nueva Fecha", value=fd); nh=c2.text_input("Hora", f.get('Hora')); nm=c3.text_input("Municipio", f.get('Municipio'))
+                nt=c1.text_input("Tipo", f.get('Tipo')); ns=c2.text_input("Sección", f.get('Seccion')); np=c3.text_input("Punto", f.get('Punto de reunion'))
+                nr=c1.text_input("Ruta", f.get('Ruta a seguir')); nam=c2.text_input("AM", f.get('AM Responsable')); ndm=c3.text_input("DM", f.get('DM Responsable'))
+                ntam=c1.text_input("Tel AM", f.get('Teléfono AM')); ntdm=c2.text_input("Tel DM", f.get('Teléfono DM')); nc=c3.text_input("Cantidad", f.get('Cantidad'))
+                if st.form_submit_button("💾 GUARDAR CAMBIOS", type="primary", use_container_width=True):
+                    new_reg = {"Fecha":nf.strftime("%Y-%m-%d"),"Hora":nh,"Tipo":nt,"Sucursal":f.get('Sucursal'),"Seccion":ns,"Ruta a seguir":nr,"Punto de reunion":np,"Municipio":f"{nm} (Evento Reagendado)","Cantidad":nc,"AM Responsable":nam,"Teléfono AM":ntam,"DM Responsable":ndm,"Teléfono DM":ntdm}
+                    if create_new_event(st.session_state.current_base_id, st.session_state.current_table_id, new_reg)[0]: st.success("Reagendado."); st.session_state.rescheduling_event=None; st.session_state.search_results=get_records(st.session_state.current_base_id, st.session_state.current_table_id, YEAR_ACTUAL, st.session_state.current_plaza_view); st.rerun()
+                    else: st.error("Error al crear")
 
-        # 3. CARGA EVIDENCIA
+        # 3. CARGA (AUTO-UPLOAD)
         else:
-            evt = st.session_state.selected_event; fields = evt['fields']
-            def render_celda_auto(columna, key, label, fields_dict):
-                with columna:
+            evt = st.session_state.selected_event; f=evt['fields']
+            if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
+            st.divider(); st.markdown(f"### 📸 {f.get('Tipo')} - {obtener_ubicacion_corta(f)}"); st.divider()
+            
+            def render_cell(col, k, label):
+                with col:
                     st.markdown(f'<p class="caption-text">{label}</p>', unsafe_allow_html=True)
-                    if fields_dict.get(key):
-                        url_img = fields_dict[key][0]['url']
-                        st.image(url_img, use_container_width=True)
-                        if st.button("🗑️ Eliminar", key=f"del_{evt['id']}_{key}", type="secondary", use_container_width=True):
-                            with st.spinner("Borrando..."):
-                                if delete_field_from_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], key):
-                                    del st.session_state.selected_event['fields'][key]; st.rerun()
-                                else: st.error("Error al borrar")
+                    if f.get(k):
+                        st.image(f[k][0]['url'], use_container_width=True)
+                        if st.button("🗑️ Eliminar", key=f"d_{k}", type="secondary", use_container_width=True):
+                            delete_field_from_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], k)
+                            del st.session_state.selected_event['fields'][k]; st.rerun()
                     else:
-                        file = st.file_uploader(key, key=f"up_{evt['id']}_{key}", label_visibility="collapsed", type=['jpg','png','jpeg','webp'])
-                        if file is not None:
-                            file_optimizado = comprimir_imagen_webp(file)
-                            with st.spinner(f"Subiendo {label}..."):
-                                try:
-                                    resp = cloudinary.uploader.upload(file_optimizado, resource_type="image", format="webp"); payload = {key: [{"url": resp['secure_url']}]}
-                                    if upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], payload): st.session_state.selected_event['fields'].update(payload); st.rerun()
-                                    else: st.error("Error Airtable")
-                                except Exception as e: st.error(f"Error: {str(e)}")
+                        up = st.file_uploader(k, key=f"u_{k}", type=['jpg','png','jpeg'], label_visibility="collapsed")
+                        if up:
+                            img_ok = comprimir_imagen_webp(up)
+                            with st.spinner("Subiendo..."):
+                                res = cloudinary.uploader.upload(img_ok, format="webp", resource_type="image")
+                                upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], {k:[{"url":res['secure_url']}]})
+                                st.session_state.selected_event['fields'][k] = [{"url":res['secure_url']}]; st.rerun()
 
-            if st.button("⬅️ REGRESAR A LISTADO DE EVENTOS", use_container_width=True, type="secondary"): st.session_state.selected_event = None; st.rerun()
-            st.divider()
-            loc_corta = obtener_ubicacion_corta(fields); fecha_fmt = formatear_fecha_larga(fields.get('Fecha')); hora = fields.get('Hora', '--')
-            st.markdown(f"### 📸 {fields.get('Tipo')} - {loc_corta}"); st.markdown(f"**{fecha_fmt} | {hora}**"); st.divider()
-            st.markdown("#### 1. Foto de Inicio"); c1, c2 = st.columns(2); render_celda_auto(c1, "Foto de equipo", "Foto de Equipo", fields)
-            st.markdown("#### 2. Fotos de Actividad"); keys_act = ["Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07"]
-            for i in range(0, len(keys_act), 2):
-                col_row = st.columns(2); render_celda_auto(col_row[0], keys_act[i], keys_act[i], fields)
-                if i + 1 < len(keys_act): render_celda_auto(col_row[1], keys_act[i+1], keys_act[i+1], fields)
-            is_sucursal = fields.get('Tipo') == "Actividad en Sucursal"; t_sec3 = "3. Reporte y Lista" if is_sucursal else "3. Reporte Firmado"; st.markdown(f"#### {t_sec3}"); c_rep, c_list = st.columns(2)
-            render_celda_auto(c_rep, "Reporte firmado", "Reporte Firmado", fields)
-            if is_sucursal: render_celda_auto(c_list, "Lista de asistencia", "Lista de Asistencia", fields)
-            st.divider()
-            if st.button("⬅️ REGRESAR A LISTADO DE EVENTOS (FINAL)", use_container_width=True, type="secondary"): st.session_state.selected_event = None; st.rerun()
+            st.markdown("#### 1. Foto Inicio"); c1,c2 = st.columns(2); render_cell(c1, "Foto de equipo", "Foto Equipo")
+            st.markdown("#### 2. Actividad"); keys=["Foto 01","Foto 02","Foto 03","Foto 04","Foto 05","Foto 06","Foto 07"]
+            for i in range(0,len(keys),2):
+                cr=st.columns(2); render_cell(cr[0], keys[i], keys[i])
+                if i+1<len(keys): render_cell(cr[1], keys[i+1], keys[i+1])
+            
+            t3 = "3. Reporte y Lista" if f.get('Tipo') == "Actividad en Sucursal" else "3. Reporte Firmado"
+            st.markdown(f"#### {t3}"); cr3=st.columns(2); render_cell(cr3[0], "Reporte firmado", "Reporte")
+            if f.get('Tipo') == "Actividad en Sucursal": render_cell(cr3[1], "Lista de asistencia", "Lista")
+            
+            st.divider(); 
+            if st.button("⬅️ REGRESAR (FINAL)", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
