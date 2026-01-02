@@ -24,13 +24,13 @@ st.markdown("""
         /* Streamlit maneja el fondo */
     }
 
-    /* --- 2. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
+    /* --- 2. LOGOTIPO DINÁMICO (LÓGICA CORRECTA) --- */
     
-    /* DEFAULT (Light Mode / Fondo Blanco) -> Muestra DARKLOGO (Contraste), Oculta Light */
+    /* POR DEFECTO (Light Theme): Ocultar Light, Mostrar Dark */
     .logo-light { display: none; }
     .logo-dark { display: block; }
 
-    /* MODO OSCURO (Dark Mode / Fondo Negro) -> Muestra LIGHTLOGO (Contraste), Oculta Dark */
+    /* MODO OSCURO (Dark Theme): Mostrar Light, Ocultar Dark */
     @media (prefers-color-scheme: dark) {
         .logo-light { display: block !important; }
         .logo-dark { display: none !important; }
@@ -110,6 +110,11 @@ st.markdown("""
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
     img { max-width: 100%; }
     .caption-text { font-size: 1.1rem !important; font-weight: 700 !important; margin-bottom: 0.5rem; }
+    
+    /* Ajuste para eliminar espacio extra en markdown de detalles */
+    .element-container .stMarkdown p {
+        margin-bottom: 0px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -185,6 +190,10 @@ def render_logo_dinamico(is_banner=False):
     if os.path.exists(light_path) and os.path.exists(dark_path):
         b64_light = get_base64_image(light_path)
         b64_dark = get_base64_image(dark_path)
+        
+        # HTML CON CLASES PARA SWITCH CSS
+        # .logo-light muestra lightlogo.png (visible en Dark Theme)
+        # .logo-dark muestra darklogo.png (visible en Light Theme)
         html = f"""
         <div style="text-align: center;">
             <img src="data:image/png;base64,{b64_light}" class="logo-light" style="{width_css}">
@@ -221,7 +230,7 @@ def check_evidencia_completa(fields):
     return False
 
 # ==============================================================================
-# 3. FUNCIONES DE API AIRTABLE (METADATA + DATOS)
+# 3. FUNCIONES DE API AIRTABLE
 # ==============================================================================
 
 def api_get_all_bases():
@@ -229,7 +238,8 @@ def api_get_all_bases():
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code == 200: return {b['name']: b['id'] for b in r.json().get('bases', [])}
+        if r.status_code == 200:
+            return {b['name']: b['id'] for b in r.json().get('bases', [])}
     except: pass
     return {}
 
@@ -238,7 +248,8 @@ def api_get_all_tables(base_id):
     headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}"}
     try:
         r = requests.get(url, headers=headers)
-        if r.status_code == 200: return {t['name']: t['id'] for t in r.json().get('tables', [])}
+        if r.status_code == 200:
+            return {t['name']: t['id'] for t in r.json().get('tables', [])}
     except: pass
     return {}
 
@@ -465,9 +476,15 @@ else:
                             c1, c2 = st.columns([1, 2.5])
                             with c1: st.image(get_imagen_plantilla(f.get('Tipo')), use_container_width=True)
                             with c2:
-                                # AQUI REINCORPORAMOS EL BLOQUE DE DETALLES
+                                # BLOQUE DE DETALLES RESTAURADO Y COMPACTO (1 POR LÍNEA)
                                 st.markdown(f"### 🗓️ {formatear_fecha_larga(f.get('Fecha'))}")
-                                st.markdown(f"**📌 Tipo:** {f.get('Tipo','--')}\n**📍 Punto:** {f.get('Punto de reunion','--')}\n**🛣️ Ruta:** {f.get('Ruta a seguir','--')}\n**🏙️ Muni:** {f.get('Municipio','--')}\n**⏰ Hora:** {f.get('Hora','--')}")
+                                st.markdown(f"""
+                                **📌 Tipo:** {f.get('Tipo','--')}  
+                                **📍 Punto:** {f.get('Punto de reunion','--')}  
+                                **🛣️ Ruta:** {f.get('Ruta a seguir','--')}  
+                                **🏙️ Muni:** {f.get('Municipio','--')}  
+                                **⏰ Hora:** {f.get('Hora','--')}
+                                """)
                                 st.markdown("<br>",unsafe_allow_html=True)
                                 cb1, cb2 = st.columns(2)
                                 if cb1.button("📸 SUBIR EVIDENCIA", key=f"b_{r['id']}", type="primary", use_container_width=True): st.session_state.selected_event=r; st.rerun()
