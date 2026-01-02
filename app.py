@@ -46,8 +46,25 @@ st.markdown("""
     .stButton button[kind="primary"] p { color: #ffffff !important; }
     .stButton button[kind="secondary"] { background-color: #dc2626 !important; border: none !important; color: #ffffff !important; font-weight: 600 !important; }
     
-    [data-testid="stFileUploader"] section { min-height: 0px !important; padding: 10px !important; border: 2px dashed #00b0ff !important; }
-    [data-testid="stFileUploader"] section::after { content: "➕"; font-size: 32px; color: #00b0ff !important; display: block; }
+    /* --- ESTILO BOTÓN (+) CARGA DE ARCHIVO --- */
+    /* Color Celeste Brillante (#40E0D0) aplicado al borde y al icono */
+    [data-testid="stFileUploader"] section { 
+        min-height: 0px !important; 
+        padding: 10px !important; 
+        border: 2px dashed #40E0D0 !important; /* Borde Celeste Brillante */
+        background-color: rgba(64, 224, 208, 0.05) !important; /* Fondo muuuuy sutil para dar cuerpo sin saturar */
+    }
+    [data-testid="stFileUploader"] section::after { 
+        content: "➕"; 
+        font-size: 32px; 
+        color: #40E0D0 !important; /* Icono Celeste Brillante */
+        display: block; 
+        text-align: center;
+    }
+    [data-testid="stFileUploader"] [data-testid="stMarkdownContainer"] p {
+        display: none; /* Ocultar texto "Drag and drop file here" para dejarlo limpio */
+    }
+
     [data-testid="stSidebar"], [data-testid="collapsedControl"] {display: none;}
     .compact-md p { margin-bottom: 0px !important; line-height: 1.4 !important; }
 </style>
@@ -326,8 +343,10 @@ def upload_evidence_to_airtable(base_id, table_id, record_id, updates):
     return r.status_code == 200 if r else False
 
 def delete_field_from_airtable(base_id, table_id, record_id, field):
+    # Función actualizada para registrar exáctamente qué campo se eliminó
     r = airtable_request("PATCH", f"https://api.airtable.com/v0/{base_id}/{table_id}/{record_id}", {"fields": {field: None}})
-    if r.status_code == 200: registrar_historial("Eliminar Evidencia", f"Campo: {field} en ID {record_id}")
+    if r.status_code == 200: 
+        registrar_historial("Eliminación Evidencia", f"Se eliminó el archivo del campo: {field}")
     return r.status_code == 200 if r else False
 
 # ==============================================================================
@@ -597,8 +616,8 @@ else:
                             else: pass 
             else:
                 if esta_completo and estado == 'Desbloqueado':
-                     st.toast("🔓 ¡PERMISO CONCEDIDO!", icon="✅")
-                     st.markdown("""<audio autoplay><source src="https://upload.wikimedia.org/wikipedia/commons/0/05/Beep-09.ogg" type="audio/ogg"></audio>""", unsafe_allow_html=True)
+                      st.toast("🔓 ¡PERMISO CONCEDIDO!", icon="✅")
+                      st.markdown("""<audio autoplay><source src="https://upload.wikimedia.org/wikipedia/commons/0/05/Beep-09.ogg" type="audio/ogg"></audio>""", unsafe_allow_html=True)
 
             def render_cell(col, k, label):
                 with col:
@@ -607,7 +626,8 @@ else:
                         st.image(f[k][0]['url'], use_container_width=True)
                         if not bloqueado:
                             if st.button("🗑️ Eliminar", key=f"d_{k}", type="secondary", use_container_width=True):
-                                airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {k: None}})
+                                # AQUÍ ESTÁ EL CAMBIO SOLICITADO PARA EL HISTORIAL DETALLADO AL BORRAR:
+                                delete_field_from_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], k)
                                 st.rerun()
                     else:
                         if not bloqueado:
