@@ -24,14 +24,10 @@ st.markdown("""
     /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
     
     /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
-    /* Aquí mostramos el lightlogo.png y ocultamos el darklogo.png */
     .logo-light { display: block; }
     .logo-dark { display: none; }
 
     /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
-    /* Aquí invertimos: Ocultamos light, Mostramos dark */
-    
-    /* Caso 1: Detectado por Sistema Operativo (Móvil) */
     @media (prefers-color-scheme: dark) {
         .logo-light { display: none !important; }
         .logo-dark { display: block !important; }
@@ -58,24 +54,18 @@ st.markdown("""
         justify-content: center;
     }
     
-    /* Ocultar TODO el contenido interno por defecto (Botón Browse, textos, limites) */
-    [data-testid="stFileUploader"] section > div {
-        display: none !important;
-    }
-    [data-testid="stFileUploader"] section button {
-        display: none !important;
-    }
+    /* Ocultar TODO el contenido interno por defecto */
+    [data-testid="stFileUploader"] section > div { display: none !important; }
+    [data-testid="stFileUploader"] section button { display: none !important; }
     [data-testid="stFileUploader"] section span, 
     [data-testid="stFileUploader"] section small, 
-    [data-testid="stFileUploader"] section p {
-        display: none !important;
-    }
+    [data-testid="stFileUploader"] section p { display: none !important; }
 
     /* Agregar ÚNICAMENTE el emoji (+) */
     [data-testid="stFileUploader"] section::after { 
         content: "➕"; 
         font-size: 28px; 
-        color: #40E0D0 !important; /* Celeste */
+        color: #40E0D0 !important; 
         display: block; 
         visibility: visible !important;
     }
@@ -85,32 +75,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- CREDENCIALES ---
-CLOUDINARY_CONFIG = {
-    "cloud_name": "dlj0pdv6i",
-    "api_key": "847419449273122",
-    "api_secret": "i0cJCELeYVAosiBL_ltjHkM_FV0"
-}
-AIRTABLE_TOKEN = "patyclv7hDjtGHB0F.19829008c5dee053cba18720d38c62ed86fa76ff0c87ad1f2d71bfe853ce9783"
+# --- CREDENCIALES DESDE SECRETS ---
+try:
+    AIRTABLE_TOKEN = st.secrets["airtable"]["token"]
+    ADMIN_BASE_ID = st.secrets["airtable"]["admin_base_id"]
+    USERS_TABLE_ID = st.secrets["airtable"]["users_table_id"]
+    CONFIG_TABLE_ID = st.secrets["airtable"]["config_table_id"]
+    BACKUP_TABLE_ID = st.secrets["airtable"]["backup_table_id"]
+    HISTORY_TABLE_ID = st.secrets["airtable"]["history_table_id"]
+    
+    TELEGRAM_TOKEN = st.secrets["telegram"]["token"]
+    TELEGRAM_CHAT_ID = st.secrets["telegram"]["chat_id"]
 
-# --- 🔔 TELEGRAM CONFIG ---
-TELEGRAM_TOKEN = "8282197056:AAGMNd3kSJThY2_RN-Umk9fAlJ3a2NECpcE"
-TELEGRAM_CHAT_ID = "1858285363"
-
-# --- CONFIGURACIÓN BASE MAESTRA ---
-ADMIN_BASE_ID = "appRF7jHcmBJZA1px"
-USERS_TABLE_ID = "tblzeDe2WTzmPKxv0"
-CONFIG_TABLE_ID = "tblB9hhfMAS8HGEjZ"
-BACKUP_TABLE_ID = "tbl50k9wNeMvr4Vbd" 
-HISTORY_TABLE_ID = "tblmy6hL3VXQM5883"
+    cloudinary.config(
+        cloud_name=st.secrets["cloudinary"]["cloud_name"],
+        api_key=st.secrets["cloudinary"]["api_key"],
+        api_secret=st.secrets["cloudinary"]["api_secret"]
+    )
+except Exception as e:
+    st.error(f"❌ Error cargando secretos: {e}. Asegúrate de tener el archivo .streamlit/secrets.toml configurado.")
+    st.stop()
 
 SUCURSALES_OFICIALES = ["Cordoba", "Orizaba", "Xalapa", "Puebla", "Oaxaca", "Tuxtepec", "Boca del Río", "Tehuacan"]
-
-cloudinary.config(
-    cloud_name=CLOUDINARY_CONFIG["cloud_name"],
-    api_key=CLOUDINARY_CONFIG["api_key"],
-    api_secret=CLOUDINARY_CONFIG["api_secret"]
-)
 
 # ==============================================================================
 # 2. FUNCIONES DE UTILIDAD
@@ -119,6 +105,11 @@ def limpiar_clave(texto):
     if not isinstance(texto, str): return str(texto).lower()
     texto = unicodedata.normalize('NFD', texto)
     return re.sub(r'[^a-z0-9]', '', ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower())
+
+def sanitize_filename(text):
+    """Limpia caracteres inválidos para nombres de archivo"""
+    text = str(text).strip()
+    return re.sub(r'[\\/*?:"<>|]', '', text)
 
 def formatear_fecha_larga(fecha_str):
     if not fecha_str: return "Fecha pendiente"
@@ -133,6 +124,45 @@ def obtener_ubicacion_corta(fields):
     opciones = [str(fields.get('Punto de reunion', '')), str(fields.get('Ruta a seguir', '')), str(fields.get('Municipio', ''))]
     validas = [op for op in opciones if op and op.lower() != 'none' and len(op) > 2]
     return min(validas, key=len) if validas else "Ubicación N/A"
+
+def generar_datos_cloudinary(fields, field_name):
+    """
+    Genera la carpeta y el nombre del archivo según la nomenclatura solicitada.
+    """
+    # 1. Procesar Fecha
+    date_str = fields.get('Fecha', datetime.now().strftime("%Y-%m-%d"))
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+    except:
+        dt = datetime.now()
+    
+    year = dt.strftime("%Y")
+    month_num = dt.strftime("%m")
+    meses = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
+    month_name = meses[dt.month]
+    day_full = dt.strftime("%Y-%m-%d")
+
+    # 2. Generar Carpeta
+    sucursal = sanitize_filename(fields.get('Sucursal', 'General'))
+    folder_path = f"Evidencias Provident/{year}/{month_num} - {month_name}/{sucursal}/{day_full}"
+
+    # 3. Generar Nombre de Archivo
+    loc_candidates = [
+        str(fields.get('Ruta a seguir', '')),
+        str(fields.get('Punto de reunion', '')),
+        str(fields.get('Municipio', ''))
+    ]
+    valid_locs = [sanitize_filename(x) for x in loc_candidates if x and str(x).lower() != 'none' and len(x) > 1]
+    valid_locs.sort(key=len)
+    short_locs = valid_locs[:2]
+    
+    location_str = "-".join(short_locs) if short_locs else "Ubicacion"
+    tipo = sanitize_filename(fields.get('Tipo', 'Evento'))
+    campo = sanitize_filename(field_name)
+    
+    file_name = f"{location_str} - {tipo}, {sucursal} - {campo}"
+    
+    return folder_path, file_name
 
 def comprimir_imagen_webp(archivo_upload):
     try:
@@ -197,7 +227,6 @@ def airtable_request(method, url, data=None, params=None):
         st.error(f"❌ Error de Conexión Python: {str(e)}")
         return None
 
-# --- TELEGRAM ALERT ---
 def enviar_alerta_telegram(mensaje):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -205,7 +234,6 @@ def enviar_alerta_telegram(mensaje):
         requests.post(url, json=payload)
     except: pass
 
-# --- AUDITORÍA / LOGS (CON ZONA HORARIA MX) ---
 def registrar_historial(accion, detalles):
     if "tbl" not in HISTORY_TABLE_ID: return 
     url = f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}"
@@ -220,7 +248,7 @@ def registrar_historial(accion, detalles):
         fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     data = {"fields": {"Fecha": fecha, "Usuario": usuario, "Rol": rol, "Sucursal": sucursal, "Accion": accion, "Detalles": detalles}}
-    res = requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
+    requests.post(url, json=data, headers={"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"})
 
 def get_full_history():
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{HISTORY_TABLE_ID}?sort%5B0%5D%5Bfield%5D=Fecha&sort%5B0%5D%5Bdirection%5D=desc")
@@ -637,14 +665,20 @@ else:
                             if up:
                                 img_ok = comprimir_imagen_webp(up)
                                 with st.spinner("Subiendo..."):
-                                    res = cloudinary.uploader.upload(img_ok, format="webp", resource_type="image")
+                                    folder_path, file_name = generar_datos_cloudinary(f, k)
+                                    res = cloudinary.uploader.upload(
+                                        img_ok,
+                                        folder=folder_path,
+                                        public_id=file_name,
+                                        overwrite=True,
+                                        format="jpg"
+                                    )
                                     upload_evidence_to_airtable(st.session_state.current_base_id, st.session_state.current_table_id, evt['id'], {k:[{"url":res['secure_url']}]})
                                     st.rerun()
                         else: st.caption("🔒")
 
             st.markdown("#### 1. Foto Inicio"); c1,c2 = st.columns(2); render_cell(c1, "Foto de equipo", "Foto Equipo")
             
-            # --- CAMBIO SOLICITADO: TÍTULO "Fotos de Actividad" ---
             st.markdown("#### Fotos de Actividad"); keys=["Foto 01","Foto 02","Foto 03","Foto 04","Foto 05","Foto 06","Foto 07"]
             for i in range(0,len(keys),2):
                 cr=st.columns(2); render_cell(cr[0], keys[i], keys[i])
@@ -654,8 +688,10 @@ else:
             st.markdown(f"#### {t3}"); cr3=st.columns(2); render_cell(cr3[0], "Reporte firmado", "Reporte")
             if f.get('Tipo') == "Actividad en Sucursal": render_cell(cr3[1], "Lista de asistencia", "Lista")
             
-            if not bloqueado and esta_completo:
-                st.divider(); st.info("⚠️ Tienes permiso temporal.")
+            if f.get('Estado_Bloqueo') == 'Desbloqueado' or (not bloqueado and esta_completo):
+                st.divider()
+                if f.get('Estado_Bloqueo') == 'Desbloqueado': st.info("⚠️ Tienes permiso temporal de edición.")
+                
                 if st.button("💾 FINALIZAR Y GUARDAR CAMBIOS", type="primary", use_container_width=True):
                     with st.spinner("Finalizando y bloqueando..."):
                         airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {"Estado_Bloqueo": None}})
