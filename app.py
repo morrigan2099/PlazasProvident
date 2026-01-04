@@ -107,7 +107,6 @@ def limpiar_clave(texto):
     return re.sub(r'[^a-z0-9]', '', ''.join(c for c in texto if unicodedata.category(c) != 'Mn').lower())
 
 def sanitize_filename(text):
-    """Limpia caracteres inválidos para nombres de archivo"""
     text = str(text).strip()
     return re.sub(r'[\\/*?:"<>|]', '', text)
 
@@ -199,9 +198,16 @@ def normalizar_texto_simple(texto):
     return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn').lower()
 
 def check_evidencia_completa(fields):
-    for k in ["Foto de equipo", "Foto 01", "Foto 02", "Foto 03", "Foto 04", "Foto 05", "Foto 06", "Foto 07", "Reporte firmado", "Lista de asistencia"]:
-        if fields.get(k): return True
-    return False
+    campos_requeridos = ["Foto de equipo", "Reporte firmado"]
+    for i in range(1, 8):
+        campos_requeridos.append(f"Foto {i:02d}")
+    if fields.get('Tipo') == "Actividad en Sucursal":
+        campos_requeridos.append("Lista de asistencia")
+
+    for k in campos_requeridos:
+        if not fields.get(k):
+            return False
+    return True
 
 # ==============================================================================
 # 3. FUNCIONES AIRTABLE
@@ -272,15 +278,21 @@ def get_records(base_id, table_id, plaza):
 def get_all_pending_requests():
     config = cargar_config_airtable()
     pending_list = []
+    headers = {"Authorization": f"Bearer {AIRTABLE_TOKEN}", "Content-Type": "application/json"}
+    
     for base_name, base_id in config['bases'].items():
         tables = config['tables'].get(base_id, {})
         for table_name, table_id in tables.items():
+            url = f"https://api.airtable.com/v0/{base_id}/{table_id}"
             params = {"filterByFormula": "{Estado_Bloqueo}='Solicitado'"}
-            r = airtable_request("GET", f"https://api.airtable.com/v0/{base_id}/{table_id}", params=params)
-            if r and r.status_code == 200:
-                for rec in r.json().get('records', []):
-                    rec['metadata'] = {"base_id": base_id, "table_id": table_id, "base_name": base_name, "table_name": table_name}
-                    pending_list.append(rec)
+            try:
+                r = requests.get(url, headers=headers, params=params)
+                if r.status_code == 200:
+                    for rec in r.json().get('records', []):
+                        rec['metadata'] = {"base_id": base_id, "table_id": table_id, "base_name": base_name, "table_name": table_name}
+                        pending_list.append(rec)
+            except Exception:
+                pass
     return pending_list
 
 # --- LÓGICA DE RESPALDO BLINDADA ---
@@ -348,7 +360,6 @@ def eliminar_usuario_airtable(rid):
     return res.status_code==200
 
 def cargar_config_airtable():
-    # Devuelve formato Dict para la TopBar
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}")
     conf = {"bases":{}, "tables":{}}
     if r and r.status_code==200:
@@ -363,7 +374,6 @@ def cargar_config_airtable():
     return conf
 
 def get_config_records_list():
-    # Devuelve lista cruda para el panel Admin (Eliminar)
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}")
     return r.json().get('records', []) if r and r.status_code==200 else []
 
@@ -373,7 +383,6 @@ def guardar_config_airtable(bn, bid, tn, tid):
     if res.status_code==200: registrar_historial("Configuración", f"Agregada tabla: {tn}")
 
 def eliminar_configuracion_airtable(record_id):
-    # Elimina físicamente el registro de la tabla de Configuración
     res = airtable_request("DELETE", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}/{record_id}")
     if res.status_code == 200: registrar_historial("Configuración", f"Eliminada configuración ID: {record_id}")
 
@@ -494,35 +503,49 @@ else:
             with st.spinner("Buscando Bases..."): real_bases = api_get_all_bases()
             if not real_bases: st.error("Error al buscar bases.")
             else:
-                sb_n = st.selectbox("Base Real", list(real_bases.keys())); sb_id = real_bases[sb_n]
-                with st.spinner("Tablas..."): real_tables = api_get_all_tables(sb_id)
-                sts = st.multiselect("Tablas a habilitar", list(real_tables.keys()))
-                if st.button("Guardar Config", type="primary"):
-                    if sts:
-                        for t in sts: guardar_config_airtable(sb_n, sb_id, t, real_tables[t])
-                        st.success("OK"); st.rerun()
-            
-            # --- NUEVA SECCIÓN: GESTIÓN DE TABLAS ACTIVAS (ELIMINAR) ---
+                sb_n = st.selectbox("1. Selecciona la Base Real", list(real_bases.keys()), key="base_selector_key")
+                sb_id = real_bases[sb_n]
+                real_tables = api_get_all_tables(sb_id)
+                
+                st.divider()
+                with st.form("form_config_tables"):
+                    st.markdown(f"**Tablas encontradas en: {sb_n}**")
+                    sts = st.multiselect("2. Selecciona las Tablas a habilitar", list(real_tables.keys()))
+                    submitted = st.form_submit_button("💾 GUARDAR CONFIGURACIÓN", type="primary")
+                    if submitted:
+                        if sts:
+                            bar_progreso = st.progress(0, text="Guardando...")
+                            total = len(sts)
+                            for i, t in enumerate(sts):
+                                guardar_config_airtable(sb_n, sb_id, t, real_tables[t])
+                                bar_progreso.progress((i + 1) / total, text=f"Guardando {t}...")
+                            st.success("✅ Configuración guardada correctamente.")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Debes seleccionar al menos una tabla.")
+
             st.divider()
             st.subheader("🗑️ Tablas Activas (Eliminar)")
-            active_configs = get_config_records_list()
-            if active_configs:
-                for conf_rec in active_configs:
-                    cf = conf_rec['fields']
-                    # Filtrar solo si tiene Activo=True (o mostrar todas para gestión)
-                    if cf.get('Activo'):
-                        col_txt, col_btn = st.columns([4, 1])
-                        with col_txt:
-                            st.text(f"{cf.get('Nombre_Base')} - {cf.get('Nombre_Tabla')}")
-                        with col_btn:
-                            if st.button("Eliminar", key=f"del_conf_{conf_rec['id']}", type="secondary"):
+            with st.container():
+                active_configs = get_config_records_list()
+                if active_configs:
+                    h1, h2, h3 = st.columns([3, 3, 1])
+                    h1.markdown("**Base**"); h2.markdown("**Tabla (Mes)**"); h3.markdown("**Acción**")
+                    st.divider()
+                    for conf_rec in active_configs:
+                        cf = conf_rec['fields']
+                        if cf.get('Activo'):
+                            c1, c2, c3 = st.columns([3, 3, 1])
+                            c1.text(cf.get('Nombre_Base'))
+                            c2.text(cf.get('Nombre_Tabla'))
+                            if c3.button("🗑️", key=f"del_{conf_rec['id']}", help="Eliminar acceso"):
                                 eliminar_configuracion_airtable(conf_rec['id'])
-                                st.success("Eliminado")
-                                time.sleep(1)
+                                st.toast("Configuración eliminada", icon="🗑️")
+                                time.sleep(0.5)
                                 st.rerun()
-            else:
-                st.info("No hay configuraciones activas.")
-            # -----------------------------------------------------------
+                else:
+                    st.info("No hay configuraciones activas.")
 
         with ta:
             st.subheader("🔐 Todas las Solicitudes Pendientes (Global)")
@@ -652,6 +675,7 @@ else:
             current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
             if current_record_fresh: f = current_record_fresh['fields']; evt = current_record_fresh
             
+            # --- MODIFICADO: EL BOTÓN SUPERIOR SIGUE SIENDO ÚTIL PERO EL INFERIOR ES CLAVE ---
             if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
             st.divider(); st.markdown(f"### 📸 {f.get('Tipo')} - {obtener_ubicacion_corta(f)}"); st.divider()
             
@@ -725,7 +749,8 @@ else:
                         st.session_state.selected_event = None
                         st.success("Guardado."); st.rerun()
             
+            # --- MODIFICADO: BOTÓN "GUARDAR" (VERDE) AL FINAL ---
             st.divider()
-            if st.button("⬅️ REGRESAR A LISTA", type="secondary", use_container_width=True):
+            if st.button("💾 GUARDAR", type="primary", use_container_width=True):
                 st.session_state.selected_event = None
                 st.rerun()
