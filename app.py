@@ -126,10 +126,6 @@ def obtener_ubicacion_corta(fields):
     return min(validas, key=len) if validas else "Ubicación N/A"
 
 def generar_datos_cloudinary(fields, field_name):
-    """
-    Genera la carpeta y el nombre del archivo según la nomenclatura solicitada.
-    """
-    # 1. Procesar Fecha
     date_str = fields.get('Fecha', datetime.now().strftime("%Y-%m-%d"))
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
@@ -142,11 +138,9 @@ def generar_datos_cloudinary(fields, field_name):
     month_name = meses[dt.month]
     day_full = dt.strftime("%Y-%m-%d")
 
-    # 2. Generar Carpeta
     sucursal = sanitize_filename(fields.get('Sucursal', 'General'))
     folder_path = f"Evidencias Provident/{year}/{month_num} - {month_name}/{sucursal}/{day_full}"
 
-    # 3. Generar Nombre de Archivo
     loc_candidates = [
         str(fields.get('Ruta a seguir', '')),
         str(fields.get('Punto de reunion', '')),
@@ -354,6 +348,7 @@ def eliminar_usuario_airtable(rid):
     return res.status_code==200
 
 def cargar_config_airtable():
+    # Devuelve formato Dict para la TopBar
     r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}")
     conf = {"bases":{}, "tables":{}}
     if r and r.status_code==200:
@@ -367,10 +362,20 @@ def cargar_config_airtable():
                     conf['tables'][bid][f.get('Nombre_Tabla')]=tid
     return conf
 
+def get_config_records_list():
+    # Devuelve lista cruda para el panel Admin (Eliminar)
+    r = airtable_request("GET", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}")
+    return r.json().get('records', []) if r and r.status_code==200 else []
+
 def guardar_config_airtable(bn, bid, tn, tid):
     data = {"fields": {"Nombre_Base":bn, "ID_Base":bid, "Nombre_Tabla":tn, "ID_Tabla":tid, "Activo":True}}
     res = airtable_request("POST", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}", data)
     if res.status_code==200: registrar_historial("Configuración", f"Agregada tabla: {tn}")
+
+def eliminar_configuracion_airtable(record_id):
+    # Elimina físicamente el registro de la tabla de Configuración
+    res = airtable_request("DELETE", f"https://api.airtable.com/v0/{ADMIN_BASE_ID}/{CONFIG_TABLE_ID}/{record_id}")
+    if res.status_code == 200: registrar_historial("Configuración", f"Eliminada configuración ID: {record_id}")
 
 def create_new_event(base_id, table_id, data):
     r = airtable_request("POST", f"https://api.airtable.com/v0/{base_id}/{table_id}", {"fields": data})
@@ -439,7 +444,7 @@ else:
     with st.container():
         c1, c2, c3 = st.columns(3); conf = cargar_config_airtable()
         with c1:
-            bn = st.selectbox("📂 Base", list(conf['bases'].keys())) if conf['bases'] else None
+            bn = st.selectbox("📂 Periodo", list(conf['bases'].keys())) if conf['bases'] else None
             bid = conf['bases'][bn] if bn else None
         with c2:
             tn = st.selectbox("📅 Mes", list(conf['tables'].get(bid, {}).keys())) if bid else None
@@ -485,7 +490,7 @@ else:
             if rid and st.button("Eliminar", type="secondary"): eliminar_usuario_airtable(rid); st.rerun()
         
         with tc:
-            st.subheader("Agregar Config"); 
+            st.subheader("Agregar Configuración")
             with st.spinner("Buscando Bases..."): real_bases = api_get_all_bases()
             if not real_bases: st.error("Error al buscar bases.")
             else:
@@ -496,7 +501,28 @@ else:
                     if sts:
                         for t in sts: guardar_config_airtable(sb_n, sb_id, t, real_tables[t])
                         st.success("OK"); st.rerun()
-            st.json(conf)
+            
+            # --- NUEVA SECCIÓN: GESTIÓN DE TABLAS ACTIVAS (ELIMINAR) ---
+            st.divider()
+            st.subheader("🗑️ Tablas Activas (Eliminar)")
+            active_configs = get_config_records_list()
+            if active_configs:
+                for conf_rec in active_configs:
+                    cf = conf_rec['fields']
+                    # Filtrar solo si tiene Activo=True (o mostrar todas para gestión)
+                    if cf.get('Activo'):
+                        col_txt, col_btn = st.columns([4, 1])
+                        with col_txt:
+                            st.text(f"{cf.get('Nombre_Base')} - {cf.get('Nombre_Tabla')}")
+                        with col_btn:
+                            if st.button("Eliminar", key=f"del_conf_{conf_rec['id']}", type="secondary"):
+                                eliminar_configuracion_airtable(conf_rec['id'])
+                                st.success("Eliminado")
+                                time.sleep(1)
+                                st.rerun()
+            else:
+                st.info("No hay configuraciones activas.")
+            # -----------------------------------------------------------
 
         with ta:
             st.subheader("🔐 Todas las Solicitudes Pendientes (Global)")
@@ -698,3 +724,8 @@ else:
                         registrar_historial("Fin Edición Permiso", f"Usuario finalizó edición ID {evt['id']}")
                         st.session_state.selected_event = None
                         st.success("Guardado."); st.rerun()
+            
+            st.divider()
+            if st.button("⬅️ REGRESAR A LISTA", type="secondary", use_container_width=True):
+                st.session_state.selected_event = None
+                st.rerun()
