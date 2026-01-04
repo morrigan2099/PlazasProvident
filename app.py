@@ -672,23 +672,23 @@ else:
             current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
             if current_record_fresh: f = current_record_fresh['fields']; evt = current_record_fresh
             
-            # --- VALIDACIÓN DE ESTADO PARA BOTONES ---
+            # --- LÓGICA DE BOTONES DINÁMICOS ---
             esta_completo = check_evidencia_completa(f)
             estado = f.get('Estado_Bloqueo')
             bloqueado = False
             if esta_completo and estado != 'Desbloqueado': bloqueado = True
 
-            # Checar si hay ALGUNA evidencia subida
             all_keys_check = ["Foto de equipo", "Reporte firmado", "Lista de asistencia"] + [f"Foto {i:02d}" for i in range(1, 8)]
             hay_evidencia = any(f.get(k) for k in all_keys_check)
             
-            is_save_mode = False
+            # Determinar si mostrar GUARDAR (Verde) o REGRESAR (Rojo)
+            show_save = False
             if not bloqueado:
                 if hay_evidencia or f.get('Estado_Bloqueo') == 'Desbloqueado':
-                    is_save_mode = True
+                    show_save = True
 
             # --- BOTÓN SUPERIOR ---
-            if is_save_mode:
+            if show_save:
                 if st.button("💾 GUARDAR", key="btn_top_save", type="primary", use_container_width=True):
                     if f.get('Estado_Bloqueo') == 'Desbloqueado':
                         with st.spinner("Finalizando edición..."):
@@ -760,7 +760,7 @@ else:
             
             # --- BOTÓN INFERIOR ---
             st.divider()
-            if is_save_mode:
+            if show_save:
                 if f.get('Estado_Bloqueo') == 'Desbloqueado': st.info("⚠️ Al guardar, se cerrará el permiso de edición.")
                 if st.button("💾 GUARDAR", key="btn_bot_save", type="primary", use_container_width=True):
                     if f.get('Estado_Bloqueo') == 'Desbloqueado':
