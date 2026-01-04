@@ -22,12 +22,9 @@ st.set_page_config(page_title="Gestor Provident", layout="wide")
 st.markdown("""
 <style>
     /* --- 1. LOGOTIPO DINÁMICO (LÓGICA INVERTIDA) --- */
-    
-    /* ESTADO POR DEFECTO (Theme Light / Fondo Blanco) */
     .logo-light { display: block; }
     .logo-dark { display: none; }
 
-    /* ESTADO MODO OSCURO (Theme Dark / Fondo Negro) */
     @media (prefers-color-scheme: dark) {
         .logo-light { display: none !important; }
         .logo-dark { display: block !important; }
@@ -198,6 +195,7 @@ def normalizar_texto_simple(texto):
     return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn').lower()
 
 def check_evidencia_completa(fields):
+    # Lógica corregida: Debe tener TODAS las evidencias para ser True.
     campos_requeridos = ["Foto de equipo", "Reporte firmado"]
     for i in range(1, 8):
         campos_requeridos.append(f"Foto {i:02d}")
@@ -206,7 +204,7 @@ def check_evidencia_completa(fields):
 
     for k in campos_requeridos:
         if not fields.get(k):
-            return False
+            return False # Falta algo, no está completa
     return True
 
 # ==============================================================================
@@ -675,8 +673,7 @@ else:
             current_record_fresh = next((r for r in get_records(st.session_state.current_base_id, st.session_state.current_table_id, st.session_state.current_plaza_view) if r['id'] == evt['id']), None)
             if current_record_fresh: f = current_record_fresh['fields']; evt = current_record_fresh
             
-            # --- MODIFICADO: EL BOTÓN SUPERIOR SIGUE SIENDO ÚTIL PERO EL INFERIOR ES CLAVE ---
-            if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True): st.session_state.selected_event=None; st.rerun()
+            # --- NOTA: Botón de Regresar Superior eliminado, solo queda el inferior "Guardar"
             st.divider(); st.markdown(f"### 📸 {f.get('Tipo')} - {obtener_ubicacion_corta(f)}"); st.divider()
             
             esta_completo = check_evidencia_completa(f)
@@ -738,19 +735,24 @@ else:
             st.markdown(f"#### {t3}"); cr3=st.columns(2); render_cell(cr3[0], "Reporte firmado", "Reporte")
             if f.get('Tipo') == "Actividad en Sucursal": render_cell(cr3[1], "Lista de asistencia", "Lista")
             
-            if f.get('Estado_Bloqueo') == 'Desbloqueado' or (not bloqueado and esta_completo):
-                st.divider()
-                if f.get('Estado_Bloqueo') == 'Desbloqueado': st.info("⚠️ Tienes permiso temporal de edición.")
-                
-                if st.button("💾 FINALIZAR Y GUARDAR CAMBIOS", type="primary", use_container_width=True):
-                    with st.spinner("Finalizando y bloqueando..."):
-                        airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {"Estado_Bloqueo": None}})
-                        registrar_historial("Fin Edición Permiso", f"Usuario finalizó edición ID {evt['id']}")
-                        st.session_state.selected_event = None
-                        st.success("Guardado."); st.rerun()
-            
-            # --- MODIFICADO: BOTÓN "GUARDAR" (VERDE) AL FINAL ---
+            # --- BOTÓN UNIFICADO: GUARDAR / SALIR / FINALIZAR ---
             st.divider()
-            if st.button("💾 GUARDAR", type="primary", use_container_width=True):
-                st.session_state.selected_event = None
-                st.rerun()
+            if not bloqueado:
+                if f.get('Estado_Bloqueo') == 'Desbloqueado': st.info("⚠️ Al guardar, se cerrará el permiso de edición.")
+                
+                if st.button("💾 GUARDAR", type="primary", use_container_width=True):
+                    # Lógica 1: Si tenía permiso, cerrarlo.
+                    if f.get('Estado_Bloqueo') == 'Desbloqueado':
+                        with st.spinner("Finalizando edición..."):
+                            airtable_request("PATCH", f"https://api.airtable.com/v0/{st.session_state.current_base_id}/{st.session_state.current_table_id}/{evt['id']}", {"fields": {"Estado_Bloqueo": None}})
+                            registrar_historial("Fin Edición Permiso", f"Usuario finalizó edición ID {evt['id']}")
+                    
+                    # Lógica 2: Salir siempre
+                    st.session_state.selected_event = None
+                    st.success("Guardado.")
+                    st.rerun()
+            else:
+                # Si está bloqueado (solo lectura), el botón es solo "Regresar"
+                if st.button("⬅️ REGRESAR", type="secondary", use_container_width=True):
+                    st.session_state.selected_event = None
+                    st.rerun()
